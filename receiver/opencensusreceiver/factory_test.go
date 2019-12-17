@@ -112,9 +112,9 @@ func TestCreateTraceReceiver(t *testing.T) {
 			}
 			if tr != nil {
 				mh := receivertest.NewMockHost()
-				err := tr.StartTraceReception(mh)
-				require.NoError(t, err, "StartTraceReception() error = %v", err)
-				tr.StopTraceReception()
+				err := tr.Start(mh)
+				require.NoError(t, err, "Start() error = %v", err)
+				tr.Shutdown()
 			}
 		})
 	}
@@ -183,9 +183,9 @@ func TestCreateMetricReceiver(t *testing.T) {
 			}
 			if tc != nil {
 				mh := receivertest.NewMockHost()
-				err := tc.StartMetricsReception(mh)
-				require.NoError(t, err, "StartTraceReception() error = %v", err)
-				tc.StopMetricsReception()
+				err := tc.Start(mh)
+				require.NoError(t, err, "Start() error = %v", err)
+				tc.Shutdown()
 			}
 		})
 	}

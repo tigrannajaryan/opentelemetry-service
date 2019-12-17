@@ -143,9 +143,9 @@ func TestZipkinReceiverPortAlreadyInUse(t *testing.T) {
 	traceReceiver, err := New("localhost:"+portStr, exportertest.NewNopTraceExporter())
 	require.NoError(t, err, "Failed to create receiver: %v", err)
 	mh := receivertest.NewMockHost()
-	err = traceReceiver.StartTraceReception(mh)
+	err = traceReceiver.Start(mh)
 	if err == nil {
-		traceReceiver.StopTraceReception()
+		traceReceiver.Shutdown()
 		t.Fatal("conflict on port was expected")
 	}
 }
@@ -407,10 +407,10 @@ func TestStartTraceReception(t *testing.T) {
 			require.Nil(t, err)
 			require.NotNil(t, zr)
 
-			err = zr.StartTraceReception(tt.host)
+			err = zr.Start(tt.host)
 			assert.Equal(t, tt.wantErr, err != nil)
 			if !tt.wantErr {
-				require.Nil(t, zr.StopTraceReception())
+				require.Nil(t, zr.Shutdown())
 			}
 		})
 	}

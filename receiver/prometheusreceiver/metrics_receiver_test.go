@@ -1044,9 +1044,9 @@ func testEndToEnd(t *testing.T, targets []*testData, useStartTimeMetric bool) {
 	rcvr := newPrometheusReceiver(logger, &Config{PrometheusConfig: cfg, UseStartTimeMetric: useStartTimeMetric}, cms)
 
 	mh := receivertest.NewMockHost()
-	err = rcvr.StartMetricsReception(mh)
-	require.Nilf(t, err, "Failed to invoke StartMetricsReception: %v", err)
-	defer rcvr.StopMetricsReception()
+	err = rcvr.Start(mh)
+	require.Nilf(t, err, "Failed to invoke Start: %v", err)
+	defer rcvr.Shutdown()
 
 	// wait for all provided data to be scraped
 	mp.wg.Wait()

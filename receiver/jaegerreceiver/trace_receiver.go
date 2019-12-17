@@ -203,7 +203,7 @@ func (jr *jReceiver) TraceSource() string {
 	return traceSource
 }
 
-func (jr *jReceiver) StartTraceReception(host receiver.Host) error {
+func (jr *jReceiver) Start(host receiver.Host) error {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 
@@ -224,7 +224,7 @@ func (jr *jReceiver) StartTraceReception(host receiver.Host) error {
 	return err
 }
 
-func (jr *jReceiver) StopTraceReception() error {
+func (jr *jReceiver) Shutdown() error {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 

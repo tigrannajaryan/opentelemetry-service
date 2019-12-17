@@ -66,8 +66,8 @@ func TestCreateTraceExporter(t *testing.T) {
 		new(exportertest.SinkTraceExporter))
 	require.NotNil(t, rcv)
 	require.Nil(t, err)
-	require.Nil(t, rcv.StartTraceReception(receivertest.NewMockHost()))
-	defer rcv.StopTraceReception()
+	require.Nil(t, rcv.Start(receivertest.NewMockHost()))
+	defer rcv.Shutdown()
 
 	tests := []struct {
 		name     string

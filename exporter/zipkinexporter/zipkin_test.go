@@ -172,8 +172,8 @@ func TestZipkinExporter_roundtripJSON(t *testing.T) {
 	require.NotNil(t, zi)
 
 	mh := receivertest.NewMockHost()
-	require.NoError(t, zi.StartTraceReception(mh))
-	defer zi.StopTraceReception()
+	require.NoError(t, zi.Start(mh))
+	defer zi.Shutdown()
 
 	// Let the receiver receive "uploaded Zipkin spans from a Java client application"
 	req, _ := http.NewRequest("POST", "https://tld.org/", strings.NewReader(zipkinSpansJSONJavaLibrary))
@@ -392,9 +392,9 @@ func TestZipkinExporter_roundtripProto(t *testing.T) {
 	require.NoError(t, err)
 
 	mh := receivertest.NewMockHost()
-	err = zi.StartTraceReception(mh)
+	err = zi.Start(mh)
 	require.NoError(t, err)
-	defer zi.StopTraceReception()
+	defer zi.Shutdown()
 
 	// Let the receiver receive "uploaded Zipkin spans from a Java client application"
 	req, _ := http.NewRequest("POST", "https://tld.org/", strings.NewReader(zipkinSpansJSONJavaLibrary))

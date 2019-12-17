@@ -39,14 +39,14 @@ type builtReceiver struct {
 func (rcv *builtReceiver) Stop() error {
 	var errors []error
 	if rcv.trace != nil {
-		err := rcv.trace.StopTraceReception()
+		err := rcv.trace.Shutdown()
 		if err != nil {
 			errors = append(errors, err)
 		}
 	}
 
 	if rcv.metrics != nil {
-		err := rcv.metrics.StopMetricsReception()
+		err := rcv.metrics.Shutdown()
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -59,14 +59,14 @@ func (rcv *builtReceiver) Stop() error {
 func (rcv *builtReceiver) Start(host receiver.Host) error {
 	var errors []error
 	if rcv.trace != nil {
-		err := rcv.trace.StartTraceReception(host)
+		err := rcv.trace.Start(host)
 		if err != nil {
 			errors = append(errors, err)
 		}
 	}
 
 	if rcv.metrics != nil {
-		err := rcv.metrics.StartMetricsReception(host)
+		err := rcv.metrics.Start(host)
 		if err != nil {
 			errors = append(errors, err)
 		}

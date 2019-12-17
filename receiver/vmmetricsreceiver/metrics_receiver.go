@@ -40,8 +40,8 @@ func (vmr *Receiver) MetricsSource() string {
 	return metricsSource
 }
 
-// StartMetricsReception scrapes VM metrics based on the OS platform.
-func (vmr *Receiver) StartMetricsReception(host receiver.Host) error {
+// Start scrapes VM metrics based on the OS platform.
+func (vmr *Receiver) Start(host receiver.Host) error {
 	vmr.mu.Lock()
 	defer vmr.mu.Unlock()
 
@@ -53,8 +53,8 @@ func (vmr *Receiver) StartMetricsReception(host receiver.Host) error {
 	return err
 }
 
-// StopMetricsReception stops and cancels the underlying VM metrics scrapers.
-func (vmr *Receiver) StopMetricsReception() error {
+// Shutdown stops and cancels the underlying VM metrics scrapers.
+func (vmr *Receiver) Shutdown() error {
 	vmr.mu.Lock()
 	defer vmr.mu.Unlock()
 

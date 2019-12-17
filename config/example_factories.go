@@ -100,11 +100,9 @@ func (f *ExampleReceiverFactory) CreateMetricsReceiver(
 // ExampleReceiverProducer allows producing traces and metrics for testing purposes.
 type ExampleReceiverProducer struct {
 	TraceConsumer   consumer.TraceConsumer
-	TraceStarted    bool
-	TraceStopped    bool
+	Started         bool
+	Stopped         bool
 	MetricsConsumer consumer.MetricsConsumer
-	MetricsStarted  bool
-	MetricsStopped  bool
 }
 
 // TraceSource returns the name of the trace data source.
@@ -112,33 +110,21 @@ func (erp *ExampleReceiverProducer) TraceSource() string {
 	return ""
 }
 
-// StartTraceReception tells the receiver to start its processing.
-func (erp *ExampleReceiverProducer) StartTraceReception(host receiver.Host) error {
-	erp.TraceStarted = true
+// Start tells the receiver to start its processing.
+func (erp *ExampleReceiverProducer) Start(host receiver.Host) error {
+	erp.Started = true
 	return nil
 }
 
-// StopTraceReception tells the receiver that should stop reception,
-func (erp *ExampleReceiverProducer) StopTraceReception() error {
-	erp.TraceStopped = true
+// Shutdown tells the receiver that should stop reception,
+func (erp *ExampleReceiverProducer) Shutdown() error {
+	erp.Stopped = true
 	return nil
 }
 
 // MetricsSource returns the name of the metrics data source.
 func (erp *ExampleReceiverProducer) MetricsSource() string {
 	return ""
-}
-
-// StartMetricsReception tells the receiver to start its processing.
-func (erp *ExampleReceiverProducer) StartMetricsReception(host receiver.Host) error {
-	erp.MetricsStarted = true
-	return nil
-}
-
-// StopMetricsReception tells the receiver that should stop reception,
-func (erp *ExampleReceiverProducer) StopMetricsReception() error {
-	erp.MetricsStopped = true
-	return nil
 }
 
 // MultiProtoReceiver is for testing purposes. We are defining an example multi protocol

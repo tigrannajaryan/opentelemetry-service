@@ -94,8 +94,8 @@ func (zr *ZipkinReceiver) TraceSource() string {
 	return traceSource
 }
 
-// StartTraceReception spins up the receiver's HTTP server and makes the receiver start its processing.
-func (zr *ZipkinReceiver) StartTraceReception(host receiver.Host) error {
+// Start spins up the receiver's HTTP server and makes the receiver start its processing.
+func (zr *ZipkinReceiver) Start(host receiver.Host) error {
 	if host == nil {
 		return errors.New("nil host")
 	}
@@ -230,10 +230,10 @@ func (zr *ZipkinReceiver) deserializeFromJSON(jsonBlob []byte, debugWasSet bool)
 	return zs, nil
 }
 
-// StopTraceReception tells the receiver that should stop reception,
+// Shutdown tells the receiver that should stop reception,
 // giving it a chance to perform any necessary clean-up and shutting down
 // its HTTP server.
-func (zr *ZipkinReceiver) StopTraceReception() error {
+func (zr *ZipkinReceiver) Shutdown() error {
 	var err = oterr.ErrAlreadyStopped
 	zr.stopOnce.Do(func() {
 		err = zr.server.Close()

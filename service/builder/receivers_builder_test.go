@@ -241,15 +241,13 @@ func TestReceiversBuilder_StartAll(t *testing.T) {
 		metrics: receiver,
 	}
 
-	assert.Equal(t, false, receiver.TraceStarted)
-	assert.Equal(t, false, receiver.MetricsStarted)
+	assert.Equal(t, false, receiver.Started)
 
 	mh := receivertest.NewMockHost()
 	err := receivers.StartAll(zap.NewNop(), mh)
 	assert.Nil(t, err)
 
-	assert.Equal(t, true, receiver.TraceStarted)
-	assert.Equal(t, true, receiver.MetricsStarted)
+	assert.Equal(t, true, receiver.Started)
 }
 
 func TestReceiversBuilder_StopAll(t *testing.T) {
@@ -263,13 +261,11 @@ func TestReceiversBuilder_StopAll(t *testing.T) {
 		metrics: receiver,
 	}
 
-	assert.Equal(t, false, receiver.TraceStopped)
-	assert.Equal(t, false, receiver.MetricsStopped)
+	assert.Equal(t, false, receiver.Stopped)
 
 	receivers.StopAll()
 
-	assert.Equal(t, true, receiver.TraceStopped)
-	assert.Equal(t, true, receiver.MetricsStopped)
+	assert.Equal(t, true, receiver.Stopped)
 }
 
 func TestReceiversBuilder_ErrorOnNilReceiver(t *testing.T) {
