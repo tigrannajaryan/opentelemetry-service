@@ -115,17 +115,7 @@ func testReceivers(
 	// Ensure receiver has its fields correctly populated.
 	require.NotNil(t, receiver)
 
-	if test.hasTraces {
-		assert.NotNil(t, receiver.trace)
-	} else {
-		assert.Nil(t, receiver.trace)
-	}
-
-	if test.hasMetrics {
-		assert.NotNil(t, receiver.metrics)
-	} else {
-		assert.Nil(t, receiver.metrics)
-	}
+	assert.NotNil(t, receiver.receiver)
 
 	// Compose the list of created exporters.
 	var exporters []*builtExporter
@@ -154,7 +144,7 @@ func testReceivers(
 		},
 	}
 	if test.hasTraces {
-		traceProducer := receiver.trace.(*config.ExampleReceiverProducer)
+		traceProducer := receiver.receiver.(*config.ExampleReceiverProducer)
 		traceProducer.TraceConsumer.ConsumeTraceData(context.Background(), traceData)
 	}
 
@@ -164,7 +154,7 @@ func testReceivers(
 		},
 	}
 	if test.hasMetrics {
-		metricsProducer := receiver.metrics.(*config.ExampleReceiverProducer)
+		metricsProducer := receiver.receiver.(*config.ExampleReceiverProducer)
 		metricsProducer.MetricsConsumer.ConsumeMetricsData(context.Background(), metricsData)
 	}
 
@@ -237,8 +227,7 @@ func TestReceiversBuilder_StartAll(t *testing.T) {
 	receiver := &config.ExampleReceiverProducer{}
 
 	receivers[rcvCfg] = &builtReceiver{
-		trace:   receiver,
-		metrics: receiver,
+		receiver: receiver,
 	}
 
 	assert.Equal(t, false, receiver.Started)
@@ -257,8 +246,7 @@ func TestReceiversBuilder_StopAll(t *testing.T) {
 	receiver := &config.ExampleReceiverProducer{}
 
 	receivers[rcvCfg] = &builtReceiver{
-		trace:   receiver,
-		metrics: receiver,
+		receiver: receiver,
 	}
 
 	assert.Equal(t, false, receiver.Stopped)

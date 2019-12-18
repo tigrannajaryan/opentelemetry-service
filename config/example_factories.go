@@ -83,7 +83,20 @@ func (f *ExampleReceiverFactory) CreateTraceReceiver(
 	if cfg.(*ExampleReceiver).FailTraceCreation {
 		return nil, configerror.ErrDataTypeIsNotSupported
 	}
-	return &ExampleReceiverProducer{TraceConsumer: nextConsumer}, nil
+
+	// There must be one receiver for both metrics and traces. We maintain a map of
+	// receivers per config.
+
+	// Check to see if there is already a receiver for this config.
+	receiver, ok := exampleReceivers[cfg]
+	if !ok {
+		receiver = &ExampleReceiverProducer{}
+		// Remember the receiver in the map
+		exampleReceivers[cfg] = receiver
+	}
+	receiver.TraceConsumer = nextConsumer
+
+	return receiver, nil
 }
 
 // CreateMetricsReceiver creates a metrics receiver based on this config.
@@ -95,7 +108,20 @@ func (f *ExampleReceiverFactory) CreateMetricsReceiver(
 	if cfg.(*ExampleReceiver).FailMetricsCreation {
 		return nil, configerror.ErrDataTypeIsNotSupported
 	}
-	return &ExampleReceiverProducer{MetricsConsumer: nextConsumer}, nil
+
+	// There must be one receiver for both metrics and traces. We maintain a map of
+	// receivers per config.
+
+	// Check to see if there is already a receiver for this config.
+	receiver, ok := exampleReceivers[cfg]
+	if !ok {
+		receiver = &ExampleReceiverProducer{}
+		// Remember the receiver in the map
+		exampleReceivers[cfg] = receiver
+	}
+	receiver.MetricsConsumer = nextConsumer
+
+	return receiver, nil
 }
 
 // ExampleReceiverProducer allows producing traces and metrics for testing purposes.
@@ -127,6 +153,12 @@ func (erp *ExampleReceiverProducer) Shutdown() error {
 func (erp *ExampleReceiverProducer) MetricsSource() string {
 	return ""
 }
+
+// This is the map of already created example receivers for particular configurations.
+// We maintain this map because the Factory is asked trace and metric receivers separately
+// when it gets CreateTraceReceiver() and CreateMetricsReceiver() but they must not
+// create separate objects, they must use one Receiver object per configuration.
+var exampleReceivers = map[configmodels.Receiver]*ExampleReceiverProducer{}
 
 // MultiProtoReceiver is for testing purposes. We are defining an example multi protocol
 // config and factory for "multireceiver" receiver type.

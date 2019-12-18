@@ -24,7 +24,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector/config/configerror"
 	"github.com/open-telemetry/opentelemetry-collector/config/configmodels"
 	"github.com/open-telemetry/opentelemetry-collector/consumer"
-	"github.com/open-telemetry/opentelemetry-collector/oterr"
 	"github.com/open-telemetry/opentelemetry-collector/processor"
 	"github.com/open-telemetry/opentelemetry-collector/receiver"
 )
@@ -32,48 +31,17 @@ import (
 // builtReceiver is a receiver that is built based on a config. It can have
 // a trace and/or a metrics component.
 type builtReceiver struct {
-	trace   receiver.TraceReceiver
-	metrics receiver.MetricsReceiver
+	receiver receiver.Receiver
 }
 
 // Stop the receiver.
 func (rcv *builtReceiver) Stop() error {
-	var errors []error
-	if rcv.trace != nil {
-		err := rcv.trace.Shutdown()
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	if rcv.metrics != nil {
-		err := rcv.metrics.Shutdown()
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	return oterr.CombineErrors(errors)
+	return rcv.receiver.Shutdown()
 }
 
 // Start the receiver.
 func (rcv *builtReceiver) Start(host component.Host) error {
-	var errors []error
-	if rcv.trace != nil {
-		err := rcv.trace.Start(host)
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	if rcv.metrics != nil {
-		err := rcv.metrics.Start(host)
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	return oterr.CombineErrors(errors)
+	return rcv.receiver.Start(host)
 }
 
 // Receivers is a map of receivers created from receiver configs.
@@ -185,17 +153,19 @@ func (rb *ReceiversBuilder) attachReceiverToPipelines(
 	// the receiver. Create the receiver of corresponding data type and make
 	// sure its output is fanned out to all attached pipelines.
 	var err error
+	var createdReceiver receiver.Receiver
+
 	switch dataType {
 	case configmodels.TracesDataType:
 		// First, create the fan out junction point.
 		junction := buildFanoutTraceConsumer(builtPipelines)
 
 		// Now create the receiver and tell it to send to the junction point.
-		rcv.trace, err = factory.CreateTraceReceiver(context.Background(), rb.logger, config, junction)
+		createdReceiver, err = factory.CreateTraceReceiver(context.Background(), rb.logger, config, junction)
 
 	case configmodels.MetricsDataType:
 		junction := buildFanoutMetricConsumer(builtPipelines)
-		rcv.metrics, err = factory.CreateMetricsReceiver(rb.logger, config, junction)
+		createdReceiver, err = factory.CreateMetricsReceiver(rb.logger, config, junction)
 	}
 
 	if err != nil {
@@ -211,9 +181,24 @@ func (rb *ReceiversBuilder) attachReceiverToPipelines(
 	}
 
 	// Check if the factory really created the receiver.
-	if rcv.trace == nil && rcv.metrics == nil {
+	if createdReceiver == nil {
 		return fmt.Errorf("factory for %q produced a nil receiver", config.Name())
 	}
+
+	if rcv.receiver != nil {
+		// The receiver was previously created for this config. This can happen if the
+		// same receiver type supports more than one data type. In that case we expect
+		// that CreateTraceReceiver and CreateMetricsReceiver return the same value.
+		if rcv.receiver != createdReceiver {
+			return fmt.Errorf(
+				"factory for %q is implemented incorrectly: "+
+					"CreateTraceReceiver and CreateMetricsReceiver must return the same "+
+					"receiver pointer when creating receivers of different data types",
+				config.Name(),
+			)
+		}
+	}
+	rcv.receiver = createdReceiver
 
 	rb.logger.Info("Receiver is enabled.",
 		zap.String("receiver", config.Name()), zap.String("datatype", dataType.GetString()))
