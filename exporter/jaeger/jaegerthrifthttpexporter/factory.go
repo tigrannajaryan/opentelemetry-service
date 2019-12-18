@@ -93,3 +93,39 @@ func (f *Factory) CreateMetricsExporter(
 ) (exporter.MetricsExporter, error) {
 	return nil, configerror.ErrDataTypeIsNotSupported
 }
+
+// CreateTraceExporter creates a trace exporter based on this config.
+func (f *Factory) CreateOTLPTraceExporter(
+	logger *zap.Logger,
+	config configmodels.Exporter,
+) (exporter.OTLPTraceExporter, error) {
+
+	expCfg := config.(*Config)
+	_, err := url.ParseRequestURI(expCfg.URL)
+	if err != nil {
+		// TODO: Improve error message, see #215
+		err = fmt.Errorf(
+			"%q config requires a valid \"url\": %v",
+			expCfg.Name(),
+			err)
+		return nil, err
+	}
+
+	if expCfg.Timeout <= 0 {
+		err := fmt.Errorf(
+			"%q config requires a positive value for \"timeout\"",
+			expCfg.Name())
+		return nil, err
+	}
+
+	exp, err := NewOTLP(
+		config,
+		expCfg.URL,
+		expCfg.Headers,
+		expCfg.Timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return exp, nil
+}

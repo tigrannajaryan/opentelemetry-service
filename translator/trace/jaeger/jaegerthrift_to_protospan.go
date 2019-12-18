@@ -24,9 +24,14 @@ import (
 	commonpb "github.com/census-instrumentation/opencensus-proto/gen-go/agent/common/v1"
 	tracepb "github.com/census-instrumentation/opencensus-proto/gen-go/trace/v1"
 	"github.com/jaegertracing/jaeger/thrift-gen/jaeger"
+	otlpagenttrace "github.com/open-telemetry/opentelemetry-proto/gen/go/agent/traces/v1"
+	otlpcommon "github.com/open-telemetry/opentelemetry-proto/gen/go/common/v1"
+	otlpresource "github.com/open-telemetry/opentelemetry-proto/gen/go/resource/v1"
+	otlptrace "github.com/open-telemetry/opentelemetry-proto/gen/go/trace/v1"
 
 	"github.com/open-telemetry/opentelemetry-collector/consumer/consumerdata"
 	"github.com/open-telemetry/opentelemetry-collector/internal"
+	"github.com/open-telemetry/opentelemetry-collector/translator/conventions"
 	tracetranslator "github.com/open-telemetry/opentelemetry-collector/translator/trace"
 )
 
@@ -35,6 +40,20 @@ func ThriftBatchToOCProto(jbatch *jaeger.Batch) (consumerdata.TraceData, error) 
 	ocbatch := consumerdata.TraceData{
 		Node:  jProcessToOCProtoNode(jbatch.GetProcess()),
 		Spans: jSpansToOCProtoSpans(jbatch.GetSpans()),
+	}
+
+	return ocbatch, nil
+}
+
+// ThriftBatchToOTLP converts a single Jaeger Thrift batch of spans to a OC proto batch.
+func ThriftBatchToOTLP(jbatch *jaeger.Batch) (consumerdata.OTLPTrace, error) {
+	ocbatch := consumerdata.OTLPTrace{
+		ResourceSpanList: []*otlpagenttrace.ResourceSpans{
+			{
+				Resource: jProcessToOTLPResource(jbatch.GetProcess()),
+				Spans:    jSpansToOTLPSpans(jbatch.GetSpans()),
+			},
+		},
 	}
 
 	return ocbatch, nil
@@ -283,4 +302,222 @@ func epochMicrosecondsAsTime(ts uint64) (t time.Time) {
 		return
 	}
 	return time.Unix(0, int64(ts*1e3)).UTC()
+}
+
+func jProcessToOTLPResource(p *jaeger.Process) *otlpresource.Resource {
+	if p == nil {
+		return nil
+	}
+
+	pTags := p.GetTags()
+	attribs := make([]*otlpcommon.AttributeKeyValue, 0, len(pTags))
+
+	if p.GetServiceName() != "" {
+		attrib := &otlpcommon.AttributeKeyValue{
+			Key:         conventions.AttributeServiceName,
+			StringValue: p.GetServiceName(),
+			Type:        otlpcommon.AttributeKeyValue_STRING,
+		}
+		attribs = append(attribs, attrib)
+	}
+
+	for _, tag := range pTags {
+		var attrib *otlpcommon.AttributeKeyValue
+		// Special treatment for special keys in the tags.
+		switch tag.GetKey() {
+		case "hostname":
+			attrib = &otlpcommon.AttributeKeyValue{
+				Key:         conventions.AttributeHostHostname,
+				StringValue: tag.GetVStr(),
+				Type:        otlpcommon.AttributeKeyValue_STRING,
+			}
+			continue
+		case "jaeger.version":
+			attrib = &otlpcommon.AttributeKeyValue{
+				Key:         conventions.AttributeLibraryVersion,
+				StringValue: "Jaeger-" + tag.GetVStr(),
+				Type:        otlpcommon.AttributeKeyValue_STRING,
+			}
+			continue
+		default:
+			attrib = jtagsToOTLPAttribute(tag)
+		}
+
+		attribs = append(attribs, attrib)
+	}
+
+	return &otlpresource.Resource{
+		Attributes: attribs,
+	}
+}
+
+func jSpansToOTLPSpans(jspans []*jaeger.Span) []*otlptrace.Span {
+	spans := make([]*otlptrace.Span, 0, len(jspans))
+	for _, jspan := range jspans {
+		if jspan == nil || reflect.DeepEqual(jspan, blankJaegerSpan) {
+			continue
+		}
+
+		startTime := epochMicrosecondsAsTime(uint64(jspan.StartTime))
+		_, sKind, sStatus, sAttributes := jtagsToOTLPAttributes(jspan.Tags)
+		span := &otlptrace.Span{
+			TraceId: tracetranslator.Int64ToByteTraceID(jspan.TraceIdHigh, jspan.TraceIdLow),
+			SpanId:  tracetranslator.Int64ToByteSpanID(jspan.SpanId),
+			// TODO: Tracestate: Check RFC status and if is applicable,
+			ParentSpanId:      tracetranslator.Int64ToByteSpanID(jspan.ParentSpanId),
+			Name:              jspan.OperationName,
+			Kind:              sKind,
+			StartTimeUnixnano: internal.TimeToUnixNano(startTime),
+			EndTimeUnixnano:   internal.TimeToUnixNano(startTime.Add(time.Duration(jspan.Duration) * time.Microsecond)),
+			Attributes:        sAttributes,
+			// TODO: StackTrace: OpenTracing defines a semantic key for "stack", should we attempt to its content to StackTrace?
+			Events: jLogsToOTLPTimeEvents(jspan.Logs),
+			Links:  jReferencesToOTLPLinks(jspan.References),
+			Status: sStatus,
+		}
+
+		spans = append(spans, span)
+	}
+	return spans
+}
+
+func jLogsToOTLPTimeEvents(logs []*jaeger.Log) []*otlptrace.Span_Event {
+	if logs == nil {
+		return nil
+	}
+
+	timeEvents := make([]*otlptrace.Span_Event, 0, len(logs))
+
+	for _, log := range logs {
+		description, _, _, attribs := jtagsToOTLPAttributes(log.Fields)
+		timeEvent := &otlptrace.Span_Event{
+			TimeUnixnano: uint64(log.Timestamp) * 1000,
+			Description:  description,
+			Attributes:   attribs,
+		}
+
+		timeEvents = append(timeEvents, timeEvent)
+	}
+
+	return timeEvents
+}
+
+func jReferencesToOTLPLinks(jrefs []*jaeger.SpanRef) []*otlptrace.Span_Link {
+	if jrefs == nil {
+		return nil
+	}
+
+	links := make([]*otlptrace.Span_Link, 0, len(jrefs))
+
+	for _, jref := range jrefs {
+		//var linkType otlptrace.Span_Link_Type
+		//if jref.RefType == jaeger.SpanRefType_CHILD_OF {
+		//	// Wording on OC for Span_Link_PARENT_LINKED_SPAN: The linked span is a parent of the current span.
+		//	linkType = otlptrace.Span_Link_PARENT_LINKED_SPAN
+		//} else {
+		//	// TODO: SpanRefType_FOLLOWS_FROM doesn't map well to OC, so treat all other cases as unknown
+		//	linkType = otlptrace.Span_Link_TYPE_UNSPECIFIED
+		//}
+
+		link := &otlptrace.Span_Link{
+			TraceId: tracetranslator.Int64ToByteTraceID(jref.TraceIdHigh, jref.TraceIdLow),
+			SpanId:  tracetranslator.Int64ToByteSpanID(jref.SpanId),
+			//Type:    linkType,
+		}
+		links = append(links, link)
+	}
+
+	return links
+}
+
+func jtagsToOTLPAttribute(tag *jaeger.Tag) *otlpcommon.AttributeKeyValue {
+	attrib := &otlpcommon.AttributeKeyValue{
+		Key: tag.Key,
+	}
+	switch tag.GetVType() {
+	case jaeger.TagType_STRING:
+		attrib.StringValue = tag.GetVStr()
+		attrib.Type = otlpcommon.AttributeKeyValue_STRING
+	case jaeger.TagType_DOUBLE:
+		attrib.DoubleValue = tag.GetVDouble()
+		attrib.Type = otlpcommon.AttributeKeyValue_DOUBLE
+	case jaeger.TagType_BOOL:
+		attrib.BoolValue = tag.GetVBool()
+		attrib.Type = otlpcommon.AttributeKeyValue_BOOL
+	case jaeger.TagType_LONG:
+		attrib.IntValue = tag.GetVLong()
+		attrib.Type = otlpcommon.AttributeKeyValue_INT
+	case jaeger.TagType_BINARY:
+		attrib.StringValue = base64.StdEncoding.EncodeToString(tag.GetVBinary())
+		attrib.Type = otlpcommon.AttributeKeyValue_STRING
+	default:
+		attrib.StringValue = fmt.Sprintf("<Unknown Jaeger TagType %q>", tag.GetVType())
+		attrib.Type = otlpcommon.AttributeKeyValue_STRING
+	}
+	return attrib
+}
+
+func jtagsToOTLPAttributes(tags []*jaeger.Tag) (string, otlptrace.Span_SpanKind, *otlptrace.Status, []*otlpcommon.AttributeKeyValue) {
+	if tags == nil {
+		return "", otlptrace.Span_SPAN_KIND_UNSPECIFIED, nil, nil
+	}
+
+	var sKind otlptrace.Span_SpanKind
+
+	var statusCodePtr *int32
+	var statusMessage string
+	var httpStatusCodePtr *int32
+	var httpStatusMessage string
+	var message string
+
+	sAttribs := make([]*otlpcommon.AttributeKeyValue, 0, len(tags))
+
+	for _, tag := range tags {
+		// Take the opportunity to get the "span.kind" per OpenTracing spec, however, keep it also on the attributes.
+		switch tag.Key {
+		case tracetranslator.TagSpanKind:
+			switch tag.GetVStr() {
+			case "client":
+				sKind = otlptrace.Span_CLIENT
+			case "server":
+				sKind = otlptrace.Span_SERVER
+			}
+
+		case tracetranslator.TagStatusCode:
+			statusCodePtr = statusCodeFromTag(tag)
+			continue
+
+		case tracetranslator.TagStatusMsg:
+			statusMessage = tag.GetVStr()
+			continue
+
+		case tracetranslator.TagHTTPStatusCode:
+			httpStatusCodePtr = statusCodeFromHTTPTag(tag)
+
+		case tracetranslator.TagHTTPStatusMsg:
+			httpStatusMessage = tag.GetVStr()
+
+		case "message":
+			message = tag.GetVStr()
+		}
+
+		attrib := jtagsToOTLPAttribute(tag)
+		sAttribs = append(sAttribs, attrib)
+	}
+
+	if statusCodePtr == nil {
+		statusCodePtr = httpStatusCodePtr
+		statusMessage = httpStatusMessage
+	}
+
+	var sStatus *otlptrace.Status
+	if statusCodePtr != nil || statusMessage != "" {
+		statusCode := int32(0)
+		if statusCodePtr != nil {
+			statusCode = *statusCodePtr
+		}
+		sStatus = &otlptrace.Status{Message: statusMessage, Code: otlptrace.Status_StatusCode(statusCode)}
+	}
+
+	return message, sKind, sStatus, sAttribs
 }

@@ -43,6 +43,15 @@ type Factory interface {
 	CreateMetricsExporter(logger *zap.Logger, cfg configmodels.Exporter) (MetricsExporter, error)
 }
 
+type ExtendedFactory interface {
+	Factory
+
+	// CreateOTLPTraceReceiver creates a trace receiver based on this config.
+	// If the receiver type does not support tracing or if the config is not valid
+	// error will be returned instead.
+	CreateOTLPTraceExporter(logger *zap.Logger, cfg configmodels.Exporter) (OTLPTraceExporter, error)
+}
+
 // Build takes a list of exporter factories and returns a map of type map[string]Factory
 // with factory type as keys. It returns a non-nil error when more than one factories
 // have the same type.

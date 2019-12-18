@@ -208,3 +208,95 @@ func extractPortFromEndpoint(endpoint string) (int, error) {
 	}
 	return int(port), nil
 }
+
+// CreateOTLPTraceReceiver creates a trace receiver based on this config.
+// If the receiver type does not support tracing or if the config is not valid
+// error will be returned instead.
+func (f *Factory) CreateOTLPTraceReceiver(ctx context.Context, logger *zap.Logger, cfg configmodels.Receiver,
+	nextConsumer consumer.OTLPTraceConsumer) (receiver.TraceReceiver, error) {
+
+	// Convert settings in the source config to Configuration struct
+	// that Jaeger receiver understands.
+
+	rCfg := cfg.(*Config)
+
+	protoGRPC := rCfg.Protocols[protoGRPC]
+	protoHTTP := rCfg.Protocols[protoThriftHTTP]
+	protoTChannel := rCfg.Protocols[protoThriftTChannel]
+	protoThriftCompact := rCfg.Protocols[protoThriftCompact]
+	protoThriftBinary := rCfg.Protocols[protoThriftBinary]
+	remoteSamplingConfig := rCfg.RemoteSampling
+
+	config := Configuration{}
+	var grpcServerOptions []grpc.ServerOption
+
+	// Set ports
+	if protoGRPC != nil && protoGRPC.IsEnabled() {
+		var err error
+		config.CollectorGRPCPort, err = extractPortFromEndpoint(protoGRPC.Endpoint)
+		if err != nil {
+			return nil, err
+		}
+
+		if protoGRPC.TLSCredentials != nil {
+			option, err := protoGRPC.TLSCredentials.ToGrpcServerOption()
+			if err != nil {
+				return nil, fmt.Errorf("failed to configure TLS: %v", err)
+			}
+			grpcServerOptions = append(grpcServerOptions, option)
+		}
+		config.CollectorGRPCOptions = grpcServerOptions
+	}
+
+	if protoHTTP != nil && protoHTTP.IsEnabled() {
+		var err error
+		config.CollectorHTTPPort, err = extractPortFromEndpoint(protoHTTP.Endpoint)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if protoTChannel != nil && protoTChannel.IsEnabled() {
+		var err error
+		config.CollectorThriftPort, err = extractPortFromEndpoint(protoTChannel.Endpoint)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if protoThriftBinary != nil && protoThriftBinary.IsEnabled() {
+		var err error
+		config.AgentBinaryThriftPort, err = extractPortFromEndpoint(protoThriftBinary.Endpoint)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if protoThriftCompact != nil && protoThriftCompact.IsEnabled() {
+		var err error
+		config.AgentCompactThriftPort, err = extractPortFromEndpoint(protoThriftCompact.Endpoint)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if remoteSamplingConfig != nil {
+		config.RemoteSamplingEndpoint = remoteSamplingConfig.FetchEndpoint
+	}
+
+	if (protoGRPC == nil && protoHTTP == nil && protoTChannel == nil && protoThriftBinary == nil && protoThriftCompact == nil) ||
+		(config.CollectorGRPCPort == 0 && config.CollectorHTTPPort == 0 && config.CollectorThriftPort == 0 && config.AgentBinaryThriftPort == 0 && config.AgentCompactThriftPort == 0) {
+		err := fmt.Errorf("either %v, %v, %v, %v, or %v protocol endpoint with non-zero port must be enabled for %s receiver",
+			protoGRPC,
+			protoThriftHTTP,
+			protoThriftTChannel,
+			protoThriftCompact,
+			protoThriftBinary,
+			typeStr,
+		)
+		return nil, err
+	}
+
+	// Create the receiver.
+	return NewOTLP(ctx, &config, nextConsumer, logger)
+}

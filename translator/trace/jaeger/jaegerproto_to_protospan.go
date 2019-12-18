@@ -40,6 +40,16 @@ func ProtoBatchToOCProto(batch model.Batch) (consumerdata.TraceData, error) {
 	return ocbatch, nil
 }
 
+// ProtoBatchToOTLP converts a single Jaeger Proto batch of spans to a OC proto batch.
+func ProtoBatchToOTLP(batch model.Batch) (consumerdata.OTLPTrace, error) {
+	ocbatch := consumerdata.OTLPTrace{
+		//Node:  jProtoProcessToOCProtoNode(batch.GetProcess()),
+		//Spans: jProtoSpansToOCProtoSpans(batch.GetSpans()),
+	}
+
+	return ocbatch, nil
+}
+
 func jProtoProcessToOCProtoNode(p *model.Process) *commonpb.Node {
 	if p == nil {
 		return nil

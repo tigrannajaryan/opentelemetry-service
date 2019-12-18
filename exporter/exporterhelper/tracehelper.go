@@ -30,6 +30,10 @@ import (
 // the number of dropped spans.
 type PushTraceData func(ctx context.Context, td consumerdata.TraceData) (droppedSpans int, err error)
 
+// PushOTLPTraceData is a helper function that is similar to ConsumeTraceData but also returns
+// the number of dropped spans.
+type PushOTLPTraceData func(ctx context.Context, td consumerdata.OTLPTrace) (droppedSpans int, err error)
+
 type traceExporter struct {
 	exporterFullName string
 	pushTraceData    PushTraceData
@@ -107,6 +111,94 @@ func pushTraceDataWithSpan(next PushTraceData, spanName string) PushTraceData {
 		if span.IsRecordingEvents() {
 			span.AddAttributes(
 				trace.Int64Attribute(numReceivedSpansAttribute, int64(len(td.Spans))),
+				trace.Int64Attribute(numDroppedSpansAttribute, int64(droppedSpans)),
+			)
+			if err != nil {
+				span.SetStatus(errToStatus(err))
+			}
+		}
+		return droppedSpans, err
+	}
+}
+
+type otlpTraceExporter struct {
+	exporterFullName string
+	pushTraceData    PushOTLPTraceData
+	shutdown         Shutdown
+}
+
+var _ exporter.OTLPTraceExporter = (*otlpTraceExporter)(nil)
+
+func (te *otlpTraceExporter) Start(host component.Host) error {
+	return nil
+}
+
+func (te *otlpTraceExporter) ConsumeOTLPTrace(ctx context.Context, td consumerdata.OTLPTrace) error {
+	exporterCtx := observability.ContextWithExporterName(ctx, te.exporterFullName)
+	_, err := te.pushTraceData(exporterCtx, td)
+	return err
+}
+
+// Shutdown stops the exporter and is invoked during shutdown.
+func (te *otlpTraceExporter) Shutdown() error {
+	return te.shutdown()
+}
+
+// NewOTLPTraceExporter creates an OTLPTraceExporter that can record metrics and can wrap every request with a Span.
+// If no options are passed it just adds the exporter format as a tag in the Context.
+// TODO: Add support for retries.
+func NewOTLPTraceExporter(config configmodels.Exporter, pushOTLPTraceData PushOTLPTraceData, options ...ExporterOption) (exporter.OTLPTraceExporter, error) {
+	if config == nil {
+		return nil, errNilConfig
+	}
+
+	if pushOTLPTraceData == nil {
+		return nil, errNilPushTraceData
+	}
+
+	opts := newExporterOptions(options...)
+	if opts.recordMetrics {
+		pushOTLPTraceData = pushOTLPTraceDataWithMetrics(pushOTLPTraceData)
+	}
+
+	if opts.recordTrace {
+		pushOTLPTraceData = pushOTLPTraceDataWithSpan(pushOTLPTraceData, config.Name()+".ExportOTLPTraceData")
+	}
+
+	// The default shutdown function returns nil.
+	if opts.shutdown == nil {
+		opts.shutdown = func() error {
+			return nil
+		}
+	}
+
+	return &otlpTraceExporter{
+		exporterFullName: config.Name(),
+		pushTraceData:    pushOTLPTraceData,
+		shutdown:         opts.shutdown,
+	}, nil
+}
+
+func pushOTLPTraceDataWithMetrics(next PushOTLPTraceData) PushOTLPTraceData {
+	return func(ctx context.Context, td consumerdata.OTLPTrace) (int, error) {
+		// TODO: Add retry logic here if we want to support because we need to record special metrics.
+		droppedSpans, err := next(ctx, td)
+		// TODO: How to record the reason of dropping? CALC TOTAL!!!!!!
+		observability.RecordMetricsForTraceExporter(ctx, len(td.ResourceSpanList), droppedSpans)
+		return droppedSpans, err
+	}
+}
+
+func pushOTLPTraceDataWithSpan(next PushOTLPTraceData, spanName string) PushOTLPTraceData {
+	return func(ctx context.Context, td consumerdata.OTLPTrace) (int, error) {
+		ctx, span := trace.StartSpan(ctx, spanName)
+		defer span.End()
+		// Call next stage.
+		droppedSpans, err := next(ctx, td)
+		if span.IsRecordingEvents() {
+			span.AddAttributes(
+				// TODO:  CALC TOTAL!!!!!!
+				trace.Int64Attribute(numReceivedSpansAttribute, int64(len(td.ResourceSpanList))),
 				trace.Int64Attribute(numDroppedSpansAttribute, int64(droppedSpans)),
 			)
 			if err != nil {

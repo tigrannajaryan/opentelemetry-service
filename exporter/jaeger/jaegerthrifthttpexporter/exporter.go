@@ -132,3 +132,96 @@ func serializeThrift(obj thrift.TStruct) (*bytes.Buffer, error) {
 	}
 	return t.Buffer, nil
 }
+
+// New returns a new Jaeger Thrift over HTTP exporter.
+// The exporterName is the name to be used in the observability of the exporter.
+// The httpAddress should be the URL of the collector to handle POST requests,
+// typically something like: http://hostname:14268/api/traces.
+// The headers parameter is used to add entries to the POST message set to the
+// collector.
+// The timeout is used to set the timeout for the HTTP requests, if the
+// value is equal or smaller than zero the default of 5 seconds is used.
+func NewOTLP(
+	config configmodels.Exporter,
+	httpAddress string,
+	headers map[string]string,
+	timeout time.Duration,
+) (exporter.OTLPTraceExporter, error) {
+
+	clientTimeout := defaultHTTPTimeout
+	if timeout != 0 {
+		clientTimeout = timeout
+	}
+	s := &jaegerThriftHTTPOTLPSender{
+		url:     httpAddress,
+		headers: headers,
+		client:  &http.Client{Timeout: clientTimeout},
+	}
+
+	exp, err := exporterhelper.NewOTLPTraceExporter(
+		config,
+		s.pushTraceData,
+		exporterhelper.WithTracing(true),
+		exporterhelper.WithMetrics(true))
+
+	return exp, err
+}
+
+// jaegerThriftHTTPSender forwards spans encoded in the jaeger thrift
+// format to a http server.
+type jaegerThriftHTTPOTLPSender struct {
+	url     string
+	headers map[string]string
+	client  *http.Client
+}
+
+func (s *jaegerThriftHTTPOTLPSender) pushTraceData(
+	ctx context.Context,
+	td consumerdata.OTLPTrace,
+) (droppedSpans int, err error) {
+
+	tBatch, err := jaegertranslator.OTLPToJaegerThrift(td)
+	if err != nil {
+		// TODO:calc total!!!
+		return len(td.ResourceSpanList), consumererror.Permanent(err)
+	}
+
+	body, err := serializeThrift(tBatch)
+	if err != nil {
+		// TODO:calc total!!!
+		return len(td.ResourceSpanList), err
+	}
+
+	req, err := http.NewRequest("POST", s.url, body)
+	if err != nil {
+		// TODO:calc total!!!
+		return len(td.ResourceSpanList), err
+	}
+
+	req.Header.Set("Content-Type", "application/x-thrift")
+	if s.headers != nil {
+		for k, v := range s.headers {
+			req.Header.Set(k, v)
+		}
+	}
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		// TODO:calc total!!!
+		return len(td.ResourceSpanList), err
+	}
+
+	io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		err = fmt.Errorf(
+			"HTTP %d %q",
+			resp.StatusCode,
+			http.StatusText(resp.StatusCode))
+		// TODO:calc total!!!
+		return len(td.ResourceSpanList), err
+	}
+
+	return 0, nil
+}
