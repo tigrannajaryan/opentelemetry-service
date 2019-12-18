@@ -20,6 +20,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/open-telemetry/opentelemetry-collector/component"
 	"github.com/open-telemetry/opentelemetry-collector/config/configerror"
 	"github.com/open-telemetry/opentelemetry-collector/config/configmodels"
 	"github.com/open-telemetry/opentelemetry-collector/consumer"
@@ -111,7 +112,7 @@ func (erp *ExampleReceiverProducer) TraceSource() string {
 }
 
 // Start tells the receiver to start its processing.
-func (erp *ExampleReceiverProducer) Start(host receiver.Host) error {
+func (erp *ExampleReceiverProducer) Start(host component.Host) error {
 	erp.Started = true
 	return nil
 }
@@ -279,7 +280,7 @@ type ExampleExporterConsumer struct {
 // Start tells the exporter to start. The exporter may prepare for exporting
 // by connecting to the endpoint. Host parameter can be used for communicating
 // with the host after Start() has already returned.
-func (exp *ExampleExporterConsumer) Start(host exporter.Host) error {
+func (exp *ExampleExporterConsumer) Start(host component.Host) error {
 	exp.ExporterStarted = true
 	return nil
 }

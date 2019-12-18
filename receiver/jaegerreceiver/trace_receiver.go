@@ -45,6 +45,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
+	"github.com/open-telemetry/opentelemetry-collector/component"
 	"github.com/open-telemetry/opentelemetry-collector/consumer"
 	"github.com/open-telemetry/opentelemetry-collector/observability"
 	"github.com/open-telemetry/opentelemetry-collector/oterr"
@@ -203,7 +204,7 @@ func (jr *jReceiver) TraceSource() string {
 	return traceSource
 }
 
-func (jr *jReceiver) Start(host receiver.Host) error {
+func (jr *jReceiver) Start(host component.Host) error {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 
@@ -375,7 +376,7 @@ func (jr *jReceiver) PostSpans(ctx context.Context, r *api_v2.PostSpansRequest) 
 	return &api_v2.PostSpansResponse{}, err
 }
 
-func (jr *jReceiver) startAgent(_ receiver.Host) error {
+func (jr *jReceiver) startAgent(_ component.Host) error {
 	if !jr.agentBinaryThriftEnabled() && !jr.agentCompactThriftEnabled() && !jr.agentHTTPEnabled() {
 		return nil
 	}
@@ -441,7 +442,7 @@ func (jr *jReceiver) buildProcessor(address string, factory apacheThrift.TProtoc
 	return processor, nil
 }
 
-func (jr *jReceiver) startCollector(host receiver.Host) error {
+func (jr *jReceiver) startCollector(host component.Host) error {
 	tch, terr := tchannel.NewChannel("jaeger-collector", new(tchannel.ChannelOptions))
 	if terr != nil {
 		return fmt.Errorf("failed to create NewTChannel: %v", terr)

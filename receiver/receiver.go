@@ -15,31 +15,13 @@
 package receiver
 
 import (
-	"context"
-
 	"github.com/open-telemetry/opentelemetry-collector/component"
 	_ "github.com/open-telemetry/opentelemetry-collector/compression/grpc" // load in supported grpc compression encodings
 )
 
-// Host represents the entity where the receiver is being hosted. It is used to
-// allow communication between the receiver and its host.
-type Host interface {
-	component.Host
-
-	// Context returns a context provided by the host to be used on the receiver
-	// operations.
-	Context() context.Context
-}
-
 // Receiver defines functions that trace and metric receivers must implement.
 type Receiver interface {
 	component.Component
-
-	// Start tells the receiver to start. The receiver may prepare for exporting
-	// by connecting to the endpoint. Host parameter can be used for communicating
-	// with the host after Start() has already returned. If error is returned by
-	// Start() then the collector startup will be aborted.
-	Start(host Host) error
 }
 
 // A TraceReceiver is an "arbitrary data"-to-"trace proto span" converter.

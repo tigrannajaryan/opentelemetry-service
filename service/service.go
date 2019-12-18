@@ -30,11 +30,11 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
+	"github.com/open-telemetry/opentelemetry-collector/component"
 	"github.com/open-telemetry/opentelemetry-collector/config"
 	"github.com/open-telemetry/opentelemetry-collector/config/configcheck"
 	"github.com/open-telemetry/opentelemetry-collector/config/configmodels"
 	"github.com/open-telemetry/opentelemetry-collector/extension"
-	"github.com/open-telemetry/opentelemetry-collector/receiver"
 	"github.com/open-telemetry/opentelemetry-collector/service/builder"
 )
 
@@ -77,7 +77,7 @@ type ApplicationStartInfo struct {
 	GitHash string
 }
 
-var _ receiver.Host = (*Application)(nil)
+var _ component.Host = (*Application)(nil)
 
 // Context returns a context provided by the host to be used on the receiver
 // operations.

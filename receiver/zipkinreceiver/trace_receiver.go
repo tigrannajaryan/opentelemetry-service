@@ -36,6 +36,7 @@ import (
 	zipkinproto "github.com/openzipkin/zipkin-go/proto/v2"
 	"go.opencensus.io/trace"
 
+	"github.com/open-telemetry/opentelemetry-collector/component"
 	"github.com/open-telemetry/opentelemetry-collector/consumer"
 	"github.com/open-telemetry/opentelemetry-collector/consumer/consumerdata"
 	"github.com/open-telemetry/opentelemetry-collector/internal"
@@ -53,7 +54,7 @@ type ZipkinReceiver struct {
 
 	// addr is the address onto which the HTTP server will be bound
 	addr         string
-	host         receiver.Host
+	host         component.Host
 	nextConsumer consumer.TraceConsumer
 
 	startOnce sync.Once
@@ -95,7 +96,7 @@ func (zr *ZipkinReceiver) TraceSource() string {
 }
 
 // Start spins up the receiver's HTTP server and makes the receiver start its processing.
-func (zr *ZipkinReceiver) Start(host receiver.Host) error {
+func (zr *ZipkinReceiver) Start(host component.Host) error {
 	if host == nil {
 		return errors.New("nil host")
 	}

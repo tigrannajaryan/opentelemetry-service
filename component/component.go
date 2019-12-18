@@ -14,29 +14,20 @@
 
 package component
 
+import "context"
+
 // Component is either a receiver, exporter, processor or extension.
 type Component interface {
+	// Start tells the component to start. Host parameter can be used for communicating
+	// with the host after Start() has already returned. If error is returned by
+	// Start() then the collector startup will be aborted.
+	// If this is an exporter component it may prepare for exporting
+	// by connecting to the endpoint.
+	Start(host Host) error
+
 	// Shutdown is invoked during service shutdown.
 	Shutdown() error
 }
-
-type Pipeline interface {
-	// Get components of specified kind and type from a pipeline. Only enabled components
-	// are returned. Typically used by component to find another components with which
-	// they want to interact. Used together with Host.FindPipelines allows components,
-	// which are designed to work tightly together to discover each other.
-	GetComponents(pipeline Pipeline, kind Kind, typeStr string) []Component
-}
-
-type Kind int
-
-const (
-	_ Kind = iota // skip 0
-	ReceiverKind
-	ProcessorKind
-	ExporterKind
-	ExtensionKind
-)
 
 type Host interface {
 	// ReportFatalError is used to report to the host that the extension
@@ -44,8 +35,7 @@ type Host interface {
 	// from) after its start function had already returned.
 	ReportFatalError(err error)
 
-	// Find a Pipeline to which the specified component belongs. The component must
-	// be part of the pipeline and must be enabled. Typically used for components
-	// to find out the pipelines to which they are attached to.
-	// FindPipelines(component Component) []Pipeline
+	// Context returns a context provided by the host to be used on the component
+	// operations.
+	Context() context.Context
 }

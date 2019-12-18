@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/prometheus/scrape"
 	"go.uber.org/zap"
 
+	"github.com/open-telemetry/opentelemetry-collector/component"
 	"github.com/open-telemetry/opentelemetry-collector/consumer"
 	"github.com/open-telemetry/opentelemetry-collector/observability"
 	"github.com/open-telemetry/opentelemetry-collector/receiver"
@@ -61,7 +62,7 @@ func (pr *Preceiver) MetricsSource() string {
 
 // Start is the method that starts Prometheus scraping and it
 // is controlled by having previously defined a Configuration using perhaps New.
-func (pr *Preceiver) Start(host receiver.Host) error {
+func (pr *Preceiver) Start(host component.Host) error {
 	pr.startOnce.Do(func() {
 		ctx := host.Context()
 		c, cancel := context.WithCancel(ctx)

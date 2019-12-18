@@ -17,6 +17,7 @@ package vmmetricsreceiver
 import (
 	"sync"
 
+	"github.com/open-telemetry/opentelemetry-collector/component"
 	"github.com/open-telemetry/opentelemetry-collector/oterr"
 	"github.com/open-telemetry/opentelemetry-collector/receiver"
 )
@@ -41,7 +42,7 @@ func (vmr *Receiver) MetricsSource() string {
 }
 
 // Start scrapes VM metrics based on the OS platform.
-func (vmr *Receiver) Start(host receiver.Host) error {
+func (vmr *Receiver) Start(host component.Host) error {
 	vmr.mu.Lock()
 	defer vmr.mu.Unlock()
 

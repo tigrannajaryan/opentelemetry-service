@@ -19,14 +19,14 @@ package receivertest
 import (
 	"context"
 
-	"github.com/open-telemetry/opentelemetry-collector/receiver"
+	"github.com/open-telemetry/opentelemetry-collector/component"
 )
 
 // MockHost mocks a receiver.ReceiverHost for test purposes.
 type MockHost struct {
 }
 
-var _ receiver.Host = (*MockHost)(nil)
+var _ component.Host = (*MockHost)(nil)
 
 // Context returns a context provided by the host to be used on the receiver
 // operations.
@@ -43,6 +43,6 @@ func (mh *MockHost) ReportFatalError(err error) {
 
 // NewMockHost returns a new instance of MockHost with proper defaults for most
 // tests.
-func NewMockHost() receiver.Host {
+func NewMockHost() component.Host {
 	return &MockHost{}
 }

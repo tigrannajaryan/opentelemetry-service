@@ -20,6 +20,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/open-telemetry/opentelemetry-collector/component"
 	"github.com/open-telemetry/opentelemetry-collector/config/configerror"
 	"github.com/open-telemetry/opentelemetry-collector/config/configmodels"
 	"github.com/open-telemetry/opentelemetry-collector/consumer"
@@ -56,7 +57,7 @@ func (rcv *builtReceiver) Stop() error {
 }
 
 // Start the receiver.
-func (rcv *builtReceiver) Start(host receiver.Host) error {
+func (rcv *builtReceiver) Start(host component.Host) error {
 	var errors []error
 	if rcv.trace != nil {
 		err := rcv.trace.Start(host)
@@ -86,7 +87,7 @@ func (rcvs Receivers) StopAll() {
 }
 
 // StartAll starts all receivers.
-func (rcvs Receivers) StartAll(logger *zap.Logger, host receiver.Host) error {
+func (rcvs Receivers) StartAll(logger *zap.Logger, host component.Host) error {
 	for cfg, rcv := range rcvs {
 		logger.Info("Receiver is starting...", zap.String("receiver", cfg.Name()))
 

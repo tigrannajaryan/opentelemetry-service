@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/open-telemetry/opentelemetry-collector/component"
 	"github.com/open-telemetry/opentelemetry-collector/config/configmodels"
 	"github.com/open-telemetry/opentelemetry-collector/consumer"
 	"github.com/open-telemetry/opentelemetry-collector/consumer/consumerdata"
@@ -40,7 +41,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector/exporter/zipkinexporter"
 	"github.com/open-telemetry/opentelemetry-collector/internal"
 	"github.com/open-telemetry/opentelemetry-collector/oterr"
-	"github.com/open-telemetry/opentelemetry-collector/receiver"
 	"github.com/open-telemetry/opentelemetry-collector/receiver/receivertest"
 	"github.com/open-telemetry/opentelemetry-collector/testutils"
 	"github.com/open-telemetry/opentelemetry-collector/translator/trace/zipkin"
@@ -387,7 +387,7 @@ func TestConversionRoundtrip(t *testing.T) {
 func TestStartTraceReception(t *testing.T) {
 	tests := []struct {
 		name    string
-		host    receiver.Host
+		host    component.Host
 		wantErr bool
 	}{
 		{

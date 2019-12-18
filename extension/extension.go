@@ -19,22 +19,11 @@ package extension
 
 import "github.com/open-telemetry/opentelemetry-collector/component"
 
-// Host represents the entity where the extension is being hosted.
-// It is used to allow communication between the extension and its host.
-type Host interface {
-	component.Host
-}
-
 // ServiceExtension is the interface for objects hosted by the OpenTelemetry Collector that
 // don't participate directly on data pipelines but provide some functionality
 // to the service, examples: health check endpoint, z-pages, etc.
 type ServiceExtension interface {
 	component.Component
-
-	// Start the ServiceExtension object hosted by the given host. At this point in the
-	// process life-cycle the receivers are not started and the host did not
-	// receive any data yet.
-	Start(host Host) error
 }
 
 // PipelineWatcher is an extra interface for ServiceExtension hosted by the OpenTelemetry
