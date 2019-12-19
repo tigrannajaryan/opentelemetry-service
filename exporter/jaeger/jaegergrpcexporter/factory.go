@@ -71,6 +71,29 @@ func (f *Factory) CreateTraceExporter(
 	return exp, nil
 }
 
+// CreateTraceExporter creates a trace exporter based on this config.
+func (f *Factory) CreateOTLPTraceExporter(
+	logger *zap.Logger,
+	config configmodels.Exporter,
+) (exporter.OTLPTraceExporter, error) {
+
+	expCfg := config.(*Config)
+	if expCfg.Endpoint == "" {
+		// TODO: Improve error message, see #215
+		err := fmt.Errorf(
+			"%q config requires a non-empty \"endpoint\"",
+			expCfg.Name())
+		return nil, err
+	}
+
+	exp, err := NewOTLP(expCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return exp, nil
+}
+
 // CreateMetricsExporter creates a metrics exporter based on this config.
 func (f *Factory) CreateMetricsExporter(
 	logger *zap.Logger,

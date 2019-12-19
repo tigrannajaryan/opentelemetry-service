@@ -40,12 +40,21 @@ func TestTrace10kSPS(t *testing.T) {
 		resourceSpec testbed.ResourceSpec
 	}{
 		{
+			"JaegerGrpc",
+			testbed.NewJaegerGrpcDataSender(testbed.GetAvailablePort(t)),
+			testbed.NewJaegerGrpcDataReceiver(testbed.GetAvailablePort(t)),
+			testbed.ResourceSpec{
+				ExpectedMaxCPU: 152,
+				ExpectedMaxRAM: 1189,
+			},
+		},
+		{
 			"JaegerThrift",
 			testbed.NewJaegerThriftDataSender(testbed.GetAvailablePort(t)),
 			testbed.NewJaegerDataReceiver(testbed.GetAvailablePort(t)),
 			testbed.ResourceSpec{
 				ExpectedMaxCPU: 52,
-				ExpectedMaxRAM: 89,
+				ExpectedMaxRAM: 1189,
 			},
 		},
 		{
@@ -54,7 +63,7 @@ func TestTrace10kSPS(t *testing.T) {
 			testbed.NewOCDataReceiver(testbed.GetAvailablePort(t)),
 			testbed.ResourceSpec{
 				ExpectedMaxCPU: 42,
-				ExpectedMaxRAM: 84,
+				ExpectedMaxRAM: 1184,
 			},
 		},
 	}
@@ -65,7 +74,7 @@ func TestTrace10kSPS(t *testing.T) {
 				t,
 				test.sender,
 				test.receiver,
-				testbed.LoadOptions{},
+				testbed.LoadOptions{ItemsPerBatch: 100},
 				test.resourceSpec,
 			)
 		})

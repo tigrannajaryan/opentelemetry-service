@@ -24,6 +24,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector/config/configgrpc"
 	"github.com/open-telemetry/opentelemetry-collector/consumer/consumerdata"
 	"github.com/open-telemetry/opentelemetry-collector/exporter"
+	"github.com/open-telemetry/opentelemetry-collector/exporter/jaeger/jaegergrpcexporter"
 	"github.com/open-telemetry/opentelemetry-collector/exporter/jaeger/jaegerthrifthttpexporter"
 	"github.com/open-telemetry/opentelemetry-collector/exporter/opencensusexporter"
 )
@@ -148,6 +149,68 @@ func (je *JaegerThriftDataSender) GenConfigYAMLStr() string {
 }
 
 func (je *JaegerThriftDataSender) ProtocolName() string {
+	return "jaeger"
+}
+
+// JaegerGrpcDataSender implements TraceDataSender for Jaeger Grpc-HTTP protocol.
+type JaegerGrpcDataSender struct {
+	DataSenderOverTraceExporter
+}
+
+// Ensure JaegerGrpcDataSender implements TraceDataSender.
+var _ TraceDataSender = (*JaegerGrpcDataSender)(nil)
+
+// NewJaegerGrpcDataSender creates a new Jaeger protocol sender that will send
+// to the specified port after Start is called.
+func NewJaegerGrpcDataSender(port int) *JaegerGrpcDataSender {
+	return &JaegerGrpcDataSender{DataSenderOverTraceExporter{Port: port}}
+}
+
+func (je *JaegerGrpcDataSender) Start() error {
+	cfg := &jaegergrpcexporter.Config{
+		GRPCSettings: configgrpc.GRPCSettings{
+			Endpoint: fmt.Sprintf("localhost:%d", je.Port),
+		},
+	}
+
+	var err error
+	factory := jaegergrpcexporter.Factory{}
+	exporter, err := factory.CreateTraceExporter(zap.L(), cfg)
+
+	if err != nil {
+		return err
+	}
+
+	je.exporter = exporter
+	return err
+}
+
+func (je *JaegerGrpcDataSender) GenConfigYAMLStr() string {
+	// Note that this generates a receiver config for agent.
+	// We only need to enable thrift-http protocol because that's what we use in tests.
+	// Due to bug in Jaeger receiver (https://github.com/open-telemetry/opentelemetry-collector/issues/445)
+	// which makes it impossible to disable protocols that we don't need to receive on we
+	// have to use fake ports for all endpoints except thrift-http, otherwise it is
+	// impossible to start the Collector because the standard ports for those protocols
+	// are already listened by mock Jaeger backend that is part of the tests.
+	// As soon as the bug is fixed remove the endpoints and use "disabled: true" setting
+	// instead.
+	return fmt.Sprintf(`
+  jaeger:
+    protocols:
+      grpc:
+        endpoint: "localhost:%d"
+      thrift-tchannel:
+        endpoint: "localhost:8372"
+      thrift-compact:
+        endpoint: "localhost:8373"
+      thrift-binary:
+        endpoint: "localhost:8374"
+      thrift-http:
+        endpoint: "localhost:8375"`, je.Port)
+}
+
+func (je *JaegerGrpcDataSender) ProtocolName() string {
 	return "jaeger"
 }
 

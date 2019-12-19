@@ -49,7 +49,8 @@ service:
   pipelines:
     traces:
       receivers: [%v]
-      processors: [batch,queued_retry]
+#      processors: [batch,queued_retry]
+      processors: []
       exporters: [%v]
 `
 	} else {
@@ -113,7 +114,8 @@ func Scenario10kItemsPerSecond(
 
 	tc.SetResourceLimits(resourceSpec)
 	tc.StartBackend()
-	tc.StartAgent()
+	args := []string{"--mem-ballast-size-mib", "1000"}
+	tc.StartAgent(args...)
 
 	if loadOptions.DataItemsPerSecond == 0 {
 		// Use 10k spans or metric data points per second by default.

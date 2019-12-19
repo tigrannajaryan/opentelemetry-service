@@ -52,6 +52,7 @@ func ThriftBatchToOTLP(jbatch *jaeger.Batch) (consumerdata.OTLPTrace, error) {
 			{
 				Resource: jProcessToOTLPResource(jbatch.GetProcess()),
 				Spans:    jSpansToOTLPSpans(jbatch.GetSpans()),
+				//Spans: []*otlptrace.Span{},
 			},
 		},
 	}

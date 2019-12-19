@@ -57,6 +57,35 @@ func New(config *Config) (exporter.TraceExporter, error) {
 	return exp, err
 }
 
+// New returns a new Jaeger gRPC exporter.
+// The exporter name is the name to be used in the observability of the exporter.
+// The collectorEndpoint should be of the form "hostname:14250" (a gRPC target).
+func NewOTLP(config *Config) (exporter.OTLPTraceExporter, error) {
+
+	opts, err := configgrpc.GrpcSettingsToDialOptions(config.GRPCSettings)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := grpc.Dial(config.GRPCSettings.Endpoint, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	collectorServiceClient := jaegerproto.NewCollectorServiceClient(client)
+	s := &protoGRPCOTLPSender{
+		client: collectorServiceClient,
+	}
+
+	exp, err := exporterhelper.NewOTLPTraceExporter(
+		config,
+		s.pushTraceData,
+		exporterhelper.WithTracing(true),
+		exporterhelper.WithMetrics(true))
+
+	return exp, err
+}
+
 // protoGRPCSender forwards spans encoded in the jaeger proto
 // format, to a grpc server.
 type protoGRPCSender struct {
@@ -82,4 +111,34 @@ func (s *protoGRPCSender) pushTraceData(
 	}
 
 	return droppedSpans, err
+}
+
+// protoGRPCSender forwards spans encoded in the jaeger proto
+// format, to a grpc server.
+type protoGRPCOTLPSender struct {
+	client jaegerproto.CollectorServiceClient
+}
+
+func (s *protoGRPCOTLPSender) pushTraceData(
+	ctx context.Context,
+	td consumerdata.OTLPTrace,
+) (droppedSpans int, err error) {
+
+	for _, spans := range td.ResourceSpanList {
+		protoBatch, err := jaegertranslator.OTLPToJaegerProto(spans)
+		if err != nil {
+			return len(td.ResourceSpanList), consumererror.Permanent(err)
+		}
+
+		_, err = s.client.PostSpans(
+			context.Background(),
+			&jaegerproto.PostSpansRequest{Batch: *protoBatch})
+
+		if err != nil {
+			droppedSpans = len(protoBatch.Spans)
+			return droppedSpans, err
+		}
+	}
+
+	return 0, nil
 }

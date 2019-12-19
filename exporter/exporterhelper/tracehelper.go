@@ -122,26 +122,16 @@ func pushTraceDataWithSpan(next PushTraceData, spanName string) PushTraceData {
 }
 
 type otlpTraceExporter struct {
-	exporterFullName string
-	pushTraceData    PushOTLPTraceData
-	shutdown         Shutdown
+	traceExporter
+	pushTraceData PushOTLPTraceData
 }
 
 var _ exporter.OTLPTraceExporter = (*otlpTraceExporter)(nil)
-
-func (te *otlpTraceExporter) Start(host component.Host) error {
-	return nil
-}
 
 func (te *otlpTraceExporter) ConsumeOTLPTrace(ctx context.Context, td consumerdata.OTLPTrace) error {
 	exporterCtx := observability.ContextWithExporterName(ctx, te.exporterFullName)
 	_, err := te.pushTraceData(exporterCtx, td)
 	return err
-}
-
-// Shutdown stops the exporter and is invoked during shutdown.
-func (te *otlpTraceExporter) Shutdown() error {
-	return te.shutdown()
 }
 
 // NewOTLPTraceExporter creates an OTLPTraceExporter that can record metrics and can wrap every request with a Span.
@@ -173,9 +163,11 @@ func NewOTLPTraceExporter(config configmodels.Exporter, pushOTLPTraceData PushOT
 	}
 
 	return &otlpTraceExporter{
-		exporterFullName: config.Name(),
-		pushTraceData:    pushOTLPTraceData,
-		shutdown:         opts.shutdown,
+		traceExporter: traceExporter{
+			exporterFullName: config.Name(),
+			shutdown:         opts.shutdown,
+		},
+		pushTraceData: pushOTLPTraceData,
 	}, nil
 }
 

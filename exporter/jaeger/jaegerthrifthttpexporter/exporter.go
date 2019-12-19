@@ -180,47 +180,49 @@ func (s *jaegerThriftHTTPOTLPSender) pushTraceData(
 	td consumerdata.OTLPTrace,
 ) (droppedSpans int, err error) {
 
-	tBatch, err := jaegertranslator.OTLPToJaegerThrift(td)
-	if err != nil {
-		// TODO:calc total!!!
-		return len(td.ResourceSpanList), consumererror.Permanent(err)
-	}
-
-	body, err := serializeThrift(tBatch)
-	if err != nil {
-		// TODO:calc total!!!
-		return len(td.ResourceSpanList), err
-	}
-
-	req, err := http.NewRequest("POST", s.url, body)
-	if err != nil {
-		// TODO:calc total!!!
-		return len(td.ResourceSpanList), err
-	}
-
-	req.Header.Set("Content-Type", "application/x-thrift")
-	if s.headers != nil {
-		for k, v := range s.headers {
-			req.Header.Set(k, v)
+	for _, spans := range td.ResourceSpanList {
+		tBatch, err := jaegertranslator.OTLPToJaegerThrift(spans)
+		if err != nil {
+			// TODO:calc total!!!
+			return len(td.ResourceSpanList), consumererror.Permanent(err)
 		}
-	}
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		// TODO:calc total!!!
-		return len(td.ResourceSpanList), err
-	}
+		body, err := serializeThrift(tBatch)
+		if err != nil {
+			// TODO:calc total!!!
+			return len(td.ResourceSpanList), err
+		}
 
-	io.Copy(ioutil.Discard, resp.Body)
-	resp.Body.Close()
+		req, err := http.NewRequest("POST", s.url, body)
+		if err != nil {
+			// TODO:calc total!!!
+			return len(td.ResourceSpanList), err
+		}
 
-	if resp.StatusCode >= http.StatusBadRequest {
-		err = fmt.Errorf(
-			"HTTP %d %q",
-			resp.StatusCode,
-			http.StatusText(resp.StatusCode))
-		// TODO:calc total!!!
-		return len(td.ResourceSpanList), err
+		req.Header.Set("Content-Type", "application/x-thrift")
+		if s.headers != nil {
+			for k, v := range s.headers {
+				req.Header.Set(k, v)
+			}
+		}
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			// TODO:calc total!!!
+			return len(td.ResourceSpanList), err
+		}
+
+		io.Copy(ioutil.Discard, resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode >= http.StatusBadRequest {
+			err = fmt.Errorf(
+				"HTTP %d %q",
+				resp.StatusCode,
+				http.StatusText(resp.StatusCode))
+			// TODO:calc total!!!
+			return len(td.ResourceSpanList), err
+		}
 	}
 
 	return 0, nil

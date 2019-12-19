@@ -215,6 +215,8 @@ func extractPortFromEndpoint(endpoint string) (int, error) {
 func (f *Factory) CreateOTLPTraceReceiver(ctx context.Context, logger *zap.Logger, cfg configmodels.Receiver,
 	nextConsumer consumer.OTLPTraceConsumer) (receiver.TraceReceiver, error) {
 
+	logger.Info("Factory CreateOTLPTraceReceiver")
+
 	// Convert settings in the source config to Configuration struct
 	// that Jaeger receiver understands.
 

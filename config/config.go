@@ -769,15 +769,15 @@ func validatePipelineProcessors(
 	pipeline *configmodels.Pipeline,
 	logger *zap.Logger,
 ) error {
-	if pipeline.InputType == configmodels.TracesDataType {
-		// Traces pipeline must have at least one processor.
-		if len(pipeline.Processors) == 0 {
-			return &configError{
-				code: errPipelineMustHaveProcessors,
-				msg:  fmt.Sprintf("pipeline %q must have at least one processor", pipeline.Name),
-			}
-		}
-	}
+	//if pipeline.InputType == configmodels.TracesDataType {
+	//	// Traces pipeline must have at least one processor.
+	//	if len(pipeline.Processors) == 0 {
+	//		return &configError{
+	//			code: errPipelineMustHaveProcessors,
+	//			msg:  fmt.Sprintf("pipeline %q must have at least one processor", pipeline.Name),
+	//		}
+	//	}
+	//}
 
 	// Validate pipeline processor name references
 	for _, ref := range pipeline.Processors {

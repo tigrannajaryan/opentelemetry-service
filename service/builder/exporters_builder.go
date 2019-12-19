@@ -184,7 +184,7 @@ func (eb *ExportersBuilder) buildExporter(
 		return nil, fmt.Errorf("exporter factory not found for type: %s", config.Type())
 	}
 
-	exporter := &builtExporter{}
+	exp := &builtExporter{}
 
 	inputDataTypes := exportersInputDataTypes[config]
 	if inputDataTypes == nil {
@@ -194,12 +194,19 @@ func (eb *ExportersBuilder) buildExporter(
 		// if there are no pipelines associated with the exporter.
 		eb.logger.Warn("Exporter " + config.Name() +
 			" is not associated with any pipeline and will not export data.")
-		return exporter, nil
+		return exp, nil
 	}
 
 	if requirement, ok := inputDataTypes[configmodels.TracesDataType]; ok {
-		// Traces data type is required. Create a trace exporter based on config.
-		te, err := factory.CreateTraceExporter(eb.logger, config)
+		var te exporter.TraceExporter
+		var err error
+		if extFactory, ok := factory.(exporter.ExtendedFactory); ok {
+			// Now create the receiver and tell it to send to the junction point.
+			te, err = extFactory.CreateOTLPTraceExporter(eb.logger, config)
+		} else {
+			// Traces data type is required. Create a trace exporter based on config.
+			te, err = factory.CreateTraceExporter(eb.logger, config)
+		}
 		if err != nil {
 			if err == configerror.ErrDataTypeIsNotSupported {
 				// Could not create because this exporter does not support this data type.
@@ -213,7 +220,7 @@ func (eb *ExportersBuilder) buildExporter(
 			return nil, fmt.Errorf("factory for %q produced a nil exporter", config.Name())
 		}
 
-		exporter.te = te
+		exp.te = te
 	}
 
 	if requirement, ok := inputDataTypes[configmodels.MetricsDataType]; ok {
@@ -233,12 +240,12 @@ func (eb *ExportersBuilder) buildExporter(
 			return nil, fmt.Errorf("factory for %q produced a nil exporter", config.Name())
 		}
 
-		exporter.me = me
+		exp.me = me
 	}
 
 	eb.logger.Info("Exporter is enabled.", zap.String("exporter", config.Name()))
 
-	return exporter, nil
+	return exp, nil
 }
 
 func typeMismatchErr(

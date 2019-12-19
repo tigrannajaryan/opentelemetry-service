@@ -143,3 +143,45 @@ func (jr *JaegerDataReceiver) GenConfigYAMLStr() string {
 func (jr *JaegerDataReceiver) ProtocolName() string {
 	return "jaeger_thrift_http"
 }
+
+// JaegerGrpcDataReceiver implements JaegerGrpc format receiver.
+type JaegerGrpcDataReceiver struct {
+	DataReceiverBase
+	receiver receiver.TraceReceiver
+}
+
+func NewJaegerGrpcDataReceiver(port int) *JaegerGrpcDataReceiver {
+	return &JaegerGrpcDataReceiver{DataReceiverBase: DataReceiverBase{Port: port}}
+}
+
+func (jr *JaegerGrpcDataReceiver) Start(tc *MockTraceConsumer, mc *MockMetricConsumer) error {
+	jaegerCfg := jaegerreceiver.Configuration{
+		CollectorGRPCPort: jr.Port,
+	}
+	var err error
+	jr.receiver, err = jaegerreceiver.New(context.Background(), &jaegerCfg, tc, zap.NewNop())
+	if err != nil {
+		return err
+	}
+
+	return jr.receiver.Start(jr)
+}
+
+func (jr *JaegerGrpcDataReceiver) Stop() {
+	if jr.receiver != nil {
+		if err := jr.receiver.Shutdown(); err != nil {
+			log.Printf("Cannot stop JaegerGrpc receiver: %s", err.Error())
+		}
+	}
+}
+
+func (jr *JaegerGrpcDataReceiver) GenConfigYAMLStr() string {
+	// Note that this generates an exporter config for agent.
+	return fmt.Sprintf(`
+  jaeger_grpc:
+    endpoint: "localhost:%d"`, jr.Port)
+}
+
+func (jr *JaegerGrpcDataReceiver) ProtocolName() string {
+	return "jaeger_grpc"
+}

@@ -86,6 +86,7 @@ type otlpTchannelReceiver struct {
 
 // New creates a TraceReceiver that receives traffic as a collector with both Thrift and HTTP transports.
 func NewOTLP(ctx context.Context, config *Configuration, nextConsumer consumer.OTLPTraceConsumer, logger *zap.Logger) (receiver.TraceReceiver, error) {
+	logger.Info("Creating OTLP Jaeger receiver")
 	return &otlpReceiver{
 		config:          config,
 		defaultAgentCtx: observability.ContextWithReceiverName(context.Background(), "jaeger-agent"),
@@ -247,6 +248,8 @@ func (jr *otlpReceiver) stopTraceReceptionLocked() error {
 }
 
 func consumeOTLPTrace(ctx context.Context, batches []*jaeger.Batch, consumer consumer.OTLPTraceConsumer) ([]*jaeger.BatchSubmitResponse, error) {
+	// log.Printf("consumeOTLPTrace %d batched", len(batches))
+
 	jbsr := make([]*jaeger.BatchSubmitResponse, 0, len(batches))
 
 	for _, batch := range batches {
@@ -325,6 +328,8 @@ func (jr *otlpReceiver) GetBaggageRestrictions(serviceName string) ([]*baggage.B
 }
 
 func (jr *otlpReceiver) PostSpans(ctx context.Context, r *api_v2.PostSpansRequest) (*api_v2.PostSpansResponse, error) {
+	// log.Printf("Received Jaeger gRPC %d spans", len(r.Batch.Spans))
+
 	ctxWithReceiverName := observability.ContextWithReceiverName(ctx, collectorReceiverTagValue)
 
 	td, err := jaegertranslator.ProtoBatchToOTLP(r.Batch)

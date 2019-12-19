@@ -23,10 +23,16 @@ import (
 	tracepb "github.com/census-instrumentation/opencensus-proto/gen-go/trace/v1"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	wrappers "github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	jaeger "github.com/jaegertracing/jaeger/model"
+	otlpagenttrace "github.com/open-telemetry/opentelemetry-proto/gen/go/agent/traces/v1"
+	otlpcommon "github.com/open-telemetry/opentelemetry-proto/gen/go/common/v1"
+	otlpresource "github.com/open-telemetry/opentelemetry-proto/gen/go/resource/v1"
+	otlptrace "github.com/open-telemetry/opentelemetry-proto/gen/go/trace/v1"
 
 	"github.com/open-telemetry/opentelemetry-collector/consumer/consumerdata"
+	"github.com/open-telemetry/opentelemetry-collector/internal"
+	"github.com/open-telemetry/opentelemetry-collector/translator/conventions"
 	tracetranslator "github.com/open-telemetry/opentelemetry-collector/translator/trace"
 )
 
@@ -527,6 +533,399 @@ func ocSpansToJaegerSpansProto(ocSpans []*tracepb.Span) ([]*jaeger.Span, error) 
 		jSpan.Tags = appendJaegerTagFromOCTracestateProto(jSpan.Tags, ocSpan.Tracestate)
 		jSpan.Tags = appendJaegerTagFromOCSameProcessAsParentSpanProto(jSpan.Tags, ocSpan.SameProcessAsParentSpan)
 		jSpan.Tags = appendJaegerTagFromOCChildSpanCountProto(jSpan.Tags, ocSpan.ChildSpanCount)
+		jSpans = append(jSpans, jSpan)
+	}
+
+	return jSpans, nil
+}
+
+// OTLPToJaegerProto translates OpenCensus trace data into the Jaeger Proto for GRPC.
+func OTLPToJaegerProto(td *otlpagenttrace.ResourceSpans) (*jaeger.Batch, error) {
+	jSpans, err := otlpSpansToJaegerSpansProto(td.Spans)
+	if err != nil {
+		return nil, err
+	}
+
+	jb := &jaeger.Batch{
+		Process: otlpResourceToJaegerProcessProto(td.Resource),
+		Spans:   jSpans,
+	}
+
+	return jb, nil
+}
+
+func otlpAttributeToJaegerProto(attr *otlpcommon.AttributeKeyValue) jaeger.KeyValue {
+	tag := jaeger.KeyValue{
+		Key: attr.Key,
+	}
+	switch attr.Type {
+	case otlpcommon.AttributeKeyValue_STRING:
+		tag.VType = jaeger.ValueType_STRING
+		tag.VStr = attr.StringValue
+	case otlpcommon.AttributeKeyValue_INT:
+		tag.VType = jaeger.ValueType_INT64
+		tag.VInt64 = attr.IntValue
+	case otlpcommon.AttributeKeyValue_BOOL:
+		tag.VType = jaeger.ValueType_BOOL
+		tag.VBool = attr.BoolValue
+	case otlpcommon.AttributeKeyValue_DOUBLE:
+		tag.VType = jaeger.ValueType_FLOAT64
+		tag.VFloat64 = attr.DoubleValue
+	}
+	return tag
+}
+
+// Replica of protospan_to_jaegerthrift.ocNodeToJaegerProcess
+func otlpResourceToJaegerProcessProto(resource *otlpresource.Resource) *jaeger.Process {
+	if resource == nil {
+		return unknownProcessProto
+	}
+
+	var jTags []jaeger.KeyValue
+	var serviceName string
+	if resource != nil {
+		for _, attr := range resource.Attributes {
+			switch attr.Key {
+			case conventions.AttributeServiceName:
+				serviceName = attr.StringValue
+			default:
+				resourceTag := otlpAttributeToJaegerProto(attr)
+				jTags = append(jTags, resourceTag)
+			}
+		}
+	}
+
+	if serviceName == "" && len(jTags) == 0 {
+		// No info to put in the process...
+		return nil
+	}
+
+	jProc := &jaeger.Process{
+		ServiceName: serviceName,
+		Tags:        jTags,
+	}
+
+	return jProc
+}
+
+func otlpLinksToJaegerReferencesProto(otlpLinks []*otlptrace.Span_Link) ([]jaeger.SpanRef, error) {
+	if otlpLinks == nil {
+		return nil, nil
+	}
+
+	jRefs := make([]jaeger.SpanRef, 0, len(otlpLinks))
+	for _, otlpLink := range otlpLinks {
+		traceIDHigh, traceIDLow, err := tracetranslator.BytesToUInt64TraceID(otlpLink.TraceId)
+		if err != nil {
+			return nil, fmt.Errorf("OC link has invalid trace ID: %v", err)
+		}
+
+		//var jRefType jaeger.SpanRefType
+		//switch ocLink.Type {
+		//case tracepb.Span_Link_PARENT_LINKED_SPAN:
+		//	jRefType = jaeger.SpanRefType_CHILD_OF
+		//default:
+		//	// TODO: (@pjanotti) Jaeger doesn't have a unknown SpanRefType, it has FOLLOWS_FROM or CHILD_OF
+		//	// at first mapping all others to FOLLOWS_FROM.
+		//	jRefType = jaeger.SpanRefType_FOLLOWS_FROM
+		//}
+
+		spanID, err := tracetranslator.BytesToUInt64SpanID(otlpLink.SpanId)
+		if err != nil {
+			return nil, fmt.Errorf("OC link has invalid span ID: %v", err)
+		}
+
+		jRef := jaeger.SpanRef{
+			TraceID: jaeger.TraceID{
+				Low:  traceIDLow,
+				High: traceIDHigh,
+			},
+			//RefType:     jRefType,
+			SpanID: jaeger.SpanID(spanID),
+		}
+		jRefs = append(jRefs, jRef)
+	}
+
+	return jRefs, nil
+}
+
+// Replica of protospan_to_jaegerthrift.otlpSpanAttributesToJaegerTags
+func otlpSpanAttributesToJaegerTagsProto(ocAttribs []*otlpcommon.AttributeKeyValue) []jaeger.KeyValue {
+	if ocAttribs == nil {
+		return nil
+	}
+
+	// Pre-allocate assuming that few attributes, if any at all, are nil.
+	jTags := make([]jaeger.KeyValue, 0, len(ocAttribs))
+	for _, attrib := range ocAttribs {
+		jTag := jaeger.KeyValue{Key: attrib.Key}
+		switch attrib.Type {
+		case otlpcommon.AttributeKeyValue_STRING:
+			// Jaeger-to-OC maps binary tags to string attributes and encodes them as
+			// base64 strings. Blindingly attempting to decode base64 seems too much.
+			jTag.VStr = attrib.StringValue
+			jTag.VType = jaeger.ValueType_STRING
+		case otlpcommon.AttributeKeyValue_INT:
+			i := attrib.IntValue
+			jTag.VInt64 = i
+			jTag.VType = jaeger.ValueType_INT64
+		case otlpcommon.AttributeKeyValue_BOOL:
+			b := attrib.BoolValue
+			jTag.VBool = b
+			jTag.VType = jaeger.ValueType_BOOL
+		case otlpcommon.AttributeKeyValue_DOUBLE:
+			d := attrib.DoubleValue
+			jTag.VFloat64 = d
+			jTag.VType = jaeger.ValueType_FLOAT64
+		default:
+			str := "<Unknown OpenCensus Attribute for key \"" + attrib.Key + "\">"
+			jTag.VStr = str
+			jTag.VType = jaeger.ValueType_STRING
+		}
+		jTags = append(jTags, jTag)
+	}
+
+	return jTags
+}
+
+func otlpEventsToJaegerLogsProto(otlpEvents []*otlptrace.Span_Event) []jaeger.Log {
+	if otlpEvents == nil {
+		return nil
+	}
+
+	// Assume that in general no time events are going to produce nil Jaeger logs.
+	jLogs := make([]jaeger.Log, 0, len(otlpEvents))
+	for _, otlpEvent := range otlpEvents {
+		jLog := jaeger.Log{
+			Timestamp: internal.UnixNanoToTime(otlpEvent.TimeUnixnano),
+		}
+		jLog.Fields = otlpSpanAttributesToJaegerTagsProto(otlpEvent.Attributes)
+		jDescTag := jaeger.KeyValue{
+			Key:   tracetranslator.AnnotationDescriptionKey,
+			VStr:  otlpEvent.Description,
+			VType: jaeger.ValueType_STRING,
+		}
+		jLog.Fields = append(jLog.Fields, jDescTag)
+
+		jLogs = append(jLogs, jLog)
+	}
+
+	return jLogs
+}
+
+//func ocAnnotationToJagerTagsProto(annotation *otlptrace.Span_TimeEvent_Annotation) []jaeger.KeyValue {
+//	if annotation == nil {
+//		return []jaeger.KeyValue{}
+//	}
+//
+//	strDescription := truncableStringToStr(annotation.Description)
+//	if strDescription == "" {
+//		return otlpSpanAttributesToJaegerTagsProto(annotation.Attributes)
+//	}
+//
+//	// TODO: Find a better tag for Annotation description.
+//	jKV := jaeger.KeyValue{
+//		Key:   ocTimeEventAnnotationDescription,
+//		VStr:  strDescription,
+//		VType: jaeger.ValueType_STRING,
+//	}
+//	return append(otlpSpanAttributesToJaegerTagsProto(annotation.Attributes), jKV)
+//}
+
+//func otlpMessageEventToJaegerTagsProto(msgEvent *otlptrace.Span_TimeEvent_MessageEvent) []jaeger.KeyValue {
+//	if msgEvent == nil {
+//		return []jaeger.KeyValue{}
+//	}
+//
+//	// TODO: Find a better tag for Message event.
+//	msgTypeStr := msgEvent.Type.String()
+//	jaegerKVs := []jaeger.KeyValue{
+//		{
+//			Key:   ocTimeEventMessageEventType,
+//			VStr:  msgTypeStr,
+//			VType: jaeger.ValueType_STRING,
+//		},
+//		{
+//			Key:    ocTimeEventMessageEventID,
+//			VInt64: int64(msgEvent.Id),
+//			VType:  jaeger.ValueType_INT64,
+//		},
+//		{
+//			Key:    ocTimeEventMessageEventUSize,
+//			VInt64: int64(msgEvent.UncompressedSize),
+//			VType:  jaeger.ValueType_INT64,
+//		},
+//		{
+//			Key:    ocTimeEventMessageEventCSize,
+//			VInt64: int64(msgEvent.CompressedSize),
+//			VType:  jaeger.ValueType_INT64,
+//		},
+//	}
+//	return jaegerKVs
+//}
+
+// Replica of protospan_to_jaegerthrift appendJaegerTagFromOTLPSpanKind
+func appendJaegerTagFromOTLPSpanKindProto(jTags []jaeger.KeyValue, otlpSpanKind otlptrace.Span_SpanKind) []jaeger.KeyValue {
+	// TODO: (@pjanotti): Replace any OpenTracing literals by importing github.com/opentracing/opentracing-go/ext?
+	var tagValue string
+	switch otlpSpanKind {
+	case otlptrace.Span_CLIENT:
+		tagValue = "client"
+	case otlptrace.Span_SERVER:
+		tagValue = "server"
+	}
+
+	if tagValue != "" {
+		jTag := jaeger.KeyValue{
+			Key:   tracetranslator.TagSpanKind,
+			VStr:  tagValue,
+			VType: jaeger.ValueType_STRING,
+		}
+		jTags = append(jTags, jTag)
+	}
+
+	return jTags
+}
+
+func appendJaegerTagFromOTLPTracestateProto(jTags []jaeger.KeyValue, otlpSpanTracestate string) []jaeger.KeyValue {
+	if otlpSpanTracestate == "" {
+		return jTags
+	}
+
+	jTag := jaeger.KeyValue{
+		Key:   "tracestate",
+		VStr:  otlpSpanTracestate,
+		VType: jaeger.ValueType_STRING,
+	}
+	jTags = append(jTags, jTag)
+
+	return jTags
+}
+
+func appendJaegerTagFromOTLPStatusProto(jTags []jaeger.KeyValue, ocStatus *otlptrace.Status) []jaeger.KeyValue {
+	if ocStatus == nil {
+		return jTags
+	}
+
+	jTags = append(jTags, jaeger.KeyValue{
+		Key:    tracetranslator.TagStatusCode,
+		VInt64: int64(ocStatus.Code),
+		VType:  jaeger.ValueType_INT64,
+	})
+
+	if ocStatus.Message != "" {
+		jTags = append(jTags, jaeger.KeyValue{
+			Key:   tracetranslator.TagStatusMsg,
+			VStr:  ocStatus.Message,
+			VType: jaeger.ValueType_STRING,
+		})
+	}
+
+	return jTags
+}
+
+func appendJaegerTagFromOTLPSameProcessAsParentSpanProto(jTags []jaeger.KeyValue, ocIsSameProcessAsParentSpan *wrappers.BoolValue) []jaeger.KeyValue {
+	if ocIsSameProcessAsParentSpan == nil {
+		return jTags
+	}
+
+	jTag := jaeger.KeyValue{
+		Key:   ocSameProcessAsParentSpan,
+		VBool: ocIsSameProcessAsParentSpan.Value,
+		VType: jaeger.ValueType_BOOL,
+	}
+	jTags = append(jTags, jTag)
+
+	return jTags
+}
+
+func appendJaegerTagFromOTLPChildSpanCountProto(jTags []jaeger.KeyValue, ocChildSpanCount int32) []jaeger.KeyValue {
+	if ocChildSpanCount == 0 {
+		return jTags
+	}
+
+	jTag := jaeger.KeyValue{
+		Key:    "childcount",
+		VInt64: int64(ocChildSpanCount),
+		VType:  jaeger.ValueType_INT64,
+	}
+	jTags = append(jTags, jTag)
+
+	return jTags
+}
+
+func otlpSpansToJaegerSpansProto(otlpSpans []*otlptrace.Span) ([]*jaeger.Span, error) {
+	if otlpSpans == nil {
+		return nil, nil
+	}
+
+	// Pre-allocate assuming that few, if any spans, are nil.
+	jSpans := make([]*jaeger.Span, 0, len(otlpSpans))
+	for _, otlpSpan := range otlpSpans {
+		var traceID jaeger.TraceID
+		traceIDHigh, traceIDLow, err := tracetranslator.BytesToUInt64TraceID(otlpSpan.TraceId)
+		if err != nil {
+			return nil, err
+		}
+		if traceIDLow == 0 && traceIDHigh == 0 {
+			return nil, errZeroTraceID
+		}
+		traceID = jaeger.TraceID{
+			Low:  traceIDLow,
+			High: traceIDHigh,
+		}
+
+		var spanID jaeger.SpanID
+		uSpanID, _ := tracetranslator.BytesToUInt64SpanID(otlpSpan.SpanId)
+		if uSpanID == 0 {
+			return nil, errZeroSpanID
+		}
+		spanID = jaeger.SpanID(uSpanID)
+
+		jReferences, err := otlpLinksToJaegerReferencesProto(otlpSpan.Links)
+		if err != nil {
+			return nil, fmt.Errorf("error converting OTLP links to Jaeger references: %v", err)
+		}
+
+		// OTLP ParentSpanId can be nil/empty: only attempt conversion if not nil/empty.
+		if len(otlpSpan.ParentSpanId) != 0 {
+			uParentSpanID, err := tracetranslator.BytesToUInt64SpanID(otlpSpan.ParentSpanId)
+			if err != nil {
+				return nil, fmt.Errorf("OTLP incorrect parent span ID: %v", err)
+			}
+
+			jReferences = append(jReferences, jaeger.SpanRef{
+				TraceID: traceID,
+				SpanID:  jaeger.SpanID(uParentSpanID),
+				RefType: jaeger.SpanRefType_CHILD_OF,
+			})
+		}
+
+		startTime := internal.UnixNanoToTime(otlpSpan.StartTimeUnixnano)
+		jSpan := &jaeger.Span{
+			TraceID:       traceID,
+			SpanID:        spanID,
+			OperationName: otlpSpan.Name,
+			References:    jReferences,
+			StartTime:     startTime,
+			Duration:      internal.UnixNanoToTime(otlpSpan.EndTimeUnixnano).Sub(startTime),
+			Tags:          otlpSpanAttributesToJaegerTagsProto(otlpSpan.Attributes),
+			Logs:          otlpEventsToJaegerLogsProto(otlpSpan.Events),
+			// Flags: TODO Flags might be used once sampling and other features are implemented in OTLP.
+		}
+
+		// Only add the "span.kind" tag if not set in the OTLP span attributes.
+		//if !tracetranslator.OTLPAttributeKeyExist(otlpSpan.Attributes, tracetranslator.TagSpanKind) {
+		jSpan.Tags = appendJaegerTagFromOTLPSpanKindProto(jSpan.Tags, otlpSpan.Kind)
+		//}
+		// Only add status tags if neither status.code and status.message are set in the OTLP span attributes.
+		//if !tracetranslator.OTLPAttributeKeyExist(otlpSpan.Attributes, tracetranslator.TagStatusCode) &&
+		//	!tracetranslator.OTLPAttributeKeyExist(otlpSpan.Attributes, tracetranslator.TagStatusMsg) {
+		jSpan.Tags = appendJaegerTagFromOTLPStatusProto(jSpan.Tags, otlpSpan.Status)
+		//}
+		jSpan.Tags = appendJaegerTagFromOTLPTracestateProto(jSpan.Tags, otlpSpan.Tracestate)
+		//jSpan.Tags = appendJaegerTagFromOTLPSameProcessAsParentSpanProto(jSpan.Tags, otlpSpan.SameProcessAsParentSpan)
+		jSpan.Tags = appendJaegerTagFromOTLPChildSpanCountProto(jSpan.Tags, otlpSpan.LocalChildSpanCount)
 		jSpans = append(jSpans, jSpan)
 	}
 

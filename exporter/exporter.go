@@ -33,6 +33,7 @@ type TraceExporter interface {
 
 // OTLPTraceExporter composes TraceConsumer with some additional exporter-specific functions.
 type OTLPTraceExporter interface {
+	consumer.TraceConsumer
 	consumer.OTLPTraceConsumer
 	Exporter
 }

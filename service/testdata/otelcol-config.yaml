@@ -2,8 +2,10 @@ receivers:
   jaeger:
 
 exporters:
-  opencensus:
-    endpoint: "locahost:55678"
+#  opencensus:
+#    endpoint: "locahost:55678"
+  jaeger_thrift_http:
+    url: "http://locahost:55678"
 
 processors:
   attributes:
@@ -24,6 +26,7 @@ service:
   pipelines:
     traces:
       receivers: [jaeger]
-      processors: [attributes, batch, queued_retry]
-      exporters: [opencensus]
+#      processors: [attributes, batch, queued_retry]
+#      exporters: [opencensus]
+      exporters: [jaeger_thrift_http]
 

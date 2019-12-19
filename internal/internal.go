@@ -34,8 +34,10 @@ func TimeToTimestamp(t time.Time) *timestamp.Timestamp {
 
 // TimeToUnixNano converts a time.Time to a timestamp.Timestamp pointer.
 func TimeToUnixNano(t time.Time) uint64 {
-	if t.IsZero() {
-		return 0
-	}
 	return uint64(t.UnixNano())
+}
+
+// TimeToUnixNano converts a time.Time to a timestamp.Timestamp pointer.
+func UnixNanoToTime(t uint64) time.Time {
+	return time.Unix(0, int64(t))
 }
