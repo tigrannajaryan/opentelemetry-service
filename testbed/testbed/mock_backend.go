@@ -139,6 +139,29 @@ func (tc *MockTraceConsumer) ConsumeTraceData(ctx context.Context, td consumerda
 	return nil
 }
 
+func (tc *MockTraceConsumer) ConsumeOTLPTrace(ctx context.Context, td consumerdata.OTLPTrace) error {
+	for _, spans := range td.ResourceSpanList {
+		atomic.AddUint64(&tc.spansReceived, uint64(len(spans.Spans)))
+		for _, span := range spans.Spans {
+
+			var spanSeqnum int64
+			var traceSeqnum int64
+
+			seqnumAttr := span.Attributes[0]
+			spanSeqnum = seqnumAttr.GetIntValue()
+
+			seqnumAttr = span.Attributes[1]
+			traceSeqnum = seqnumAttr.GetIntValue()
+
+			// Ignore the seqnums for now. We will use them later.
+			_ = spanSeqnum
+			_ = traceSeqnum
+		}
+	}
+
+	return nil
+}
+
 type MockMetricConsumer struct {
 	metricsReceived uint64
 }

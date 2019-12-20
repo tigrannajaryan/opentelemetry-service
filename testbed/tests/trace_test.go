@@ -66,6 +66,15 @@ func TestTrace10kSPS(t *testing.T) {
 				ExpectedMaxRAM: 1184,
 			},
 		},
+		{
+			"OTLP",
+			testbed.NewOTLPTraceDataSender(testbed.GetAvailablePort(t)),
+			testbed.NewOTLPDataReceiver(testbed.GetAvailablePort(t)),
+			testbed.ResourceSpec{
+				ExpectedMaxCPU: 42,
+				ExpectedMaxRAM: 1184,
+			},
+		},
 	}
 
 	for _, test := range tests {

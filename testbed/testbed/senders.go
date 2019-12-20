@@ -19,6 +19,11 @@ import (
 	"fmt"
 	"time"
 
+	tracepb "github.com/census-instrumentation/opencensus-proto/gen-go/trace/v1"
+	"github.com/golang/protobuf/ptypes/timestamp"
+	otlpagenttrace "github.com/open-telemetry/opentelemetry-proto/gen/go/agent/traces/v1"
+	otlpcommon "github.com/open-telemetry/opentelemetry-proto/gen/go/common/v1"
+	otlptrace "github.com/open-telemetry/opentelemetry-proto/gen/go/trace/v1"
 	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector/config/configgrpc"
@@ -315,7 +320,8 @@ func (ome *OCMetricsDataSender) ProtocolName() string {
 
 // OTLPTraceDataSender implements TraceDataSender for OpenCensus trace protocol.
 type OTLPTraceDataSender struct {
-	DataSenderOverTraceExporter
+	exporter exporter.OTLPTraceExporter
+	Port     int
 }
 
 // Ensure OTLPTraceDataSender implements TraceDataSender.
@@ -324,7 +330,7 @@ var _ TraceDataSender = (*OTLPTraceDataSender)(nil)
 // NewOTLPTraceDataSender creates a new OTLPTraceDataSender that will send
 // to the specified port after Start is called.
 func NewOTLPTraceDataSender(port int) *OTLPTraceDataSender {
-	return &OTLPTraceDataSender{DataSenderOverTraceExporter{Port: port}}
+	return &OTLPTraceDataSender{Port: port}
 }
 
 func (ote *OTLPTraceDataSender) Start() error {
@@ -345,15 +351,97 @@ func (ote *OTLPTraceDataSender) Start() error {
 	return err
 }
 
+func timestamptToUnixNano(t *timestamp.Timestamp) uint64 {
+	return uint64(t.Seconds*1e9) + uint64(t.Nanos)
+}
+
+func truncableStringToStr(ts *tracepb.TruncatableString) string {
+	if ts == nil {
+		return ""
+	}
+	return ts.Value
+}
+
+func ocAttrToOTLP(attrs *tracepb.Span_Attributes) []*otlpcommon.AttributeKeyValue {
+	var oattrs []*otlpcommon.AttributeKeyValue
+	for key, attrib := range attrs.AttributeMap {
+		oa := &otlpcommon.AttributeKeyValue{Key: key}
+		switch attribValue := attrib.Value.(type) {
+		case *tracepb.AttributeValue_StringValue:
+			// Jaeger-to-OC maps binary tags to string attributes and encodes them as
+			// base64 strings. Blindingly attempting to decode base64 seems too much.
+			str := truncableStringToStr(attribValue.StringValue)
+			oa.StringValue = str
+			oa.Type = otlpcommon.AttributeKeyValue_STRING
+		case *tracepb.AttributeValue_IntValue:
+			i := attribValue.IntValue
+			oa.IntValue = i
+			oa.Type = otlpcommon.AttributeKeyValue_INT
+		case *tracepb.AttributeValue_BoolValue:
+			b := attribValue.BoolValue
+			oa.BoolValue = b
+			oa.Type = otlpcommon.AttributeKeyValue_BOOL
+		case *tracepb.AttributeValue_DoubleValue:
+			d := attribValue.DoubleValue
+			oa.DoubleValue = d
+			oa.Type = otlpcommon.AttributeKeyValue_DOUBLE
+		default:
+			str := "<Unknown OpenCensus Attribute for key \"" + key + "\">"
+			oa.StringValue = str
+			oa.Type = otlpcommon.AttributeKeyValue_STRING
+		}
+		oattrs = append(oattrs, oa)
+	}
+	return oattrs
+}
+
+func ocSpanToOTLPSpan(ocSpan *tracepb.Span) *otlptrace.Span {
+	return &otlptrace.Span{
+		TraceId:      ocSpan.TraceId,
+		SpanId:       ocSpan.SpanId,
+		Tracestate:   "",
+		ParentSpanId: ocSpan.ParentSpanId,
+		Name:         ocSpan.Name.Value,
+		//Kind:                   ocSpan.Kind,
+		StartTimeUnixnano: timestamptToUnixNano(ocSpan.StartTime),
+		EndTimeUnixnano:   timestamptToUnixNano(ocSpan.EndTime),
+		Attributes:        ocAttrToOTLP(ocSpan.Attributes),
+		//Events:                 nil,
+		//Links:                  nil,
+		//Status:                 ocSpan.Status,
+	}
+}
+
+func traceDataToOTLPTrace(td consumerdata.TraceData) consumerdata.OTLPTrace {
+	var spans []*otlptrace.Span
+	for _, span := range td.Spans {
+		otlpSpan := ocSpanToOTLPSpan(span)
+		spans = append(spans, otlpSpan)
+	}
+	return consumerdata.OTLPTrace{ResourceSpanList: []*otlpagenttrace.ResourceSpans{{Spans: spans}}}
+}
+
+func (ds *OTLPTraceDataSender) SendSpans(traces consumerdata.TraceData) error {
+	return ds.exporter.ConsumeOTLPTrace(context.Background(), traceDataToOTLPTrace(traces))
+}
+
+func (ds *OTLPTraceDataSender) Flush() {
+	// TraceExporter interface does not support Flush, so nothing to do.
+}
+
+func (ds *OTLPTraceDataSender) GetCollectorPort() int {
+	return ds.Port
+}
+
 func (ote *OTLPTraceDataSender) GenConfigYAMLStr() string {
 	// Note that this generates a receiver config for agent.
 	return fmt.Sprintf(`
-  opencensus:
+  otlp:
     endpoint: "localhost:%d"`, ote.Port)
 }
 
 func (ote *OTLPTraceDataSender) ProtocolName() string {
-	return "opencensus"
+	return "otlp"
 }
 
 // OTLPMetricsDataSender implements MetricDataSender for OpenCensus metrics protocol.
@@ -399,7 +487,7 @@ func (ome *OTLPMetricsDataSender) Flush() {
 func (ome *OTLPMetricsDataSender) GenConfigYAMLStr() string {
 	// Note that this generates a receiver config for agent.
 	return fmt.Sprintf(`
-  opencensus:
+  otlp:
     endpoint: "localhost:%d"`, ome.port)
 }
 
@@ -408,5 +496,5 @@ func (ome *OTLPMetricsDataSender) GetCollectorPort() int {
 }
 
 func (ome *OTLPMetricsDataSender) ProtocolName() string {
-	return "opencensus"
+	return "otlp"
 }

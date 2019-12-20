@@ -8,6 +8,7 @@ require (
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/golang/protobuf v1.3.2
 	github.com/open-telemetry/opentelemetry-collector v0.2.1
+	github.com/open-telemetry/opentelemetry-proto v0.0.0-20191218174002-1b332dbc8805
 	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/spf13/viper v1.4.1-0.20190911140308-99520c81d86e
 	github.com/stretchr/testify v1.4.0

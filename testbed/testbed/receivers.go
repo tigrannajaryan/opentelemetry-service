@@ -24,6 +24,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector/receiver"
 	"github.com/open-telemetry/opentelemetry-collector/receiver/jaegerreceiver"
 	"github.com/open-telemetry/opentelemetry-collector/receiver/opencensusreceiver"
+	"github.com/open-telemetry/opentelemetry-collector/receiver/otlpreceiver"
 )
 
 // DataReceiver allows to receive traces or metrics. This is an interface that must
@@ -98,6 +99,47 @@ func (or *OCDataReceiver) GenConfigYAMLStr() string {
 
 func (or *OCDataReceiver) ProtocolName() string {
 	return "opencensus"
+}
+
+// OTLPDataReceiver implements OpenCensus format receiver.
+type OTLPDataReceiver struct {
+	DataReceiverBase
+	receiver *otlpreceiver.Receiver
+}
+
+// Ensure OTLPDataReceiver implements MetricDataSender.
+var _ DataReceiver = (*OTLPDataReceiver)(nil)
+
+// NewOTLPDataReceiver creates a new OTLPDataReceiver that will listen on the specified port after Start
+// is called.
+func NewOTLPDataReceiver(port int) *OTLPDataReceiver {
+	return &OTLPDataReceiver{DataReceiverBase: DataReceiverBase{Port: port}}
+}
+
+func (or *OTLPDataReceiver) Start(tc *MockTraceConsumer, mc *MockMetricConsumer) error {
+	addr := fmt.Sprintf("localhost:%d", or.Port)
+	var err error
+	or.receiver, err = otlpreceiver.New(addr, tc, mc)
+	if err != nil {
+		return err
+	}
+
+	return or.receiver.Start(or)
+}
+
+func (or *OTLPDataReceiver) Stop() {
+	or.receiver.Shutdown()
+}
+
+func (or *OTLPDataReceiver) GenConfigYAMLStr() string {
+	// Note that this generates an exporter config for agent.
+	return fmt.Sprintf(`
+  otlp:
+    endpoint: "localhost:%d"`, or.Port)
+}
+
+func (or *OTLPDataReceiver) ProtocolName() string {
+	return "otlp"
 }
 
 // JaegerDataReceiver implements Jaeger format receiver.

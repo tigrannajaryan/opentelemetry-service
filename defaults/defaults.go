@@ -22,6 +22,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector/exporter/jaeger/jaegerthrifthttpexporter"
 	"github.com/open-telemetry/opentelemetry-collector/exporter/loggingexporter"
 	"github.com/open-telemetry/opentelemetry-collector/exporter/opencensusexporter"
+	"github.com/open-telemetry/opentelemetry-collector/exporter/otlpexporter"
 	"github.com/open-telemetry/opentelemetry-collector/exporter/prometheusexporter"
 	"github.com/open-telemetry/opentelemetry-collector/exporter/zipkinexporter"
 	"github.com/open-telemetry/opentelemetry-collector/extension"
@@ -38,6 +39,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector/receiver"
 	"github.com/open-telemetry/opentelemetry-collector/receiver/jaegerreceiver"
 	"github.com/open-telemetry/opentelemetry-collector/receiver/opencensusreceiver"
+	"github.com/open-telemetry/opentelemetry-collector/receiver/otlpreceiver"
 	"github.com/open-telemetry/opentelemetry-collector/receiver/prometheusreceiver"
 	"github.com/open-telemetry/opentelemetry-collector/receiver/vmmetricsreceiver"
 	"github.com/open-telemetry/opentelemetry-collector/receiver/zipkinreceiver"
@@ -66,6 +68,7 @@ func Components() (
 		&prometheusreceiver.Factory{},
 		&opencensusreceiver.Factory{},
 		&vmmetricsreceiver.Factory{},
+		&otlpreceiver.Factory{},
 	)
 	if err != nil {
 		errs = append(errs, err)
@@ -78,6 +81,7 @@ func Components() (
 		&zipkinexporter.Factory{},
 		&jaegergrpcexporter.Factory{},
 		&jaegerthrifthttpexporter.Factory{},
+		&otlpexporter.Factory{},
 	)
 	if err != nil {
 		errs = append(errs, err)
