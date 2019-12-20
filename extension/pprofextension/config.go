@@ -36,4 +36,6 @@ type Config struct {
 	// disables profiling. See https://golang.org/pkg/runtime/#SetMutexProfileFraction
 	// for details.
 	MutexProfileFraction int `mapstructure:"mutex_profile_fraction"`
+
+	SaveToFile string `mapstructure:"save_to_file"`
 }
