@@ -25,8 +25,9 @@ import (
 
 // SinkTraceExporter acts as a trace receiver for use in tests.
 type SinkTraceExporter struct {
-	mu     sync.Mutex
-	traces []consumerdata.TraceData
+	mu         sync.Mutex
+	traces     []consumerdata.TraceData
+	otlpTraces []consumerdata.OTLPTrace
 }
 
 var _ exporter.TraceExporter = (*SinkTraceExporter)(nil)
@@ -35,6 +36,16 @@ var _ exporter.TraceExporter = (*SinkTraceExporter)(nil)
 // by connecting to the endpoint. Host parameter can be used for communicating
 // with the host after Start() has already returned.
 func (ste *SinkTraceExporter) Start(host component.Host) error {
+	return nil
+}
+
+// ConsumeTraceData stores traces for tests.
+func (ste *SinkTraceExporter) ConsumeOTLPTrace(ctx context.Context, td consumerdata.OTLPTrace) error {
+	ste.mu.Lock()
+	defer ste.mu.Unlock()
+
+	ste.otlpTraces = append(ste.otlpTraces, td)
+
 	return nil
 }
 
