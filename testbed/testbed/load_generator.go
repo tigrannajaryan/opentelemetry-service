@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -34,6 +35,8 @@ import (
 // LoadGenerator is a simple load generator.
 type LoadGenerator struct {
 	sender DataSender
+
+	random *rand.Rand
 
 	// Number of batches of data items sent.
 	batchesSent uint64
@@ -69,6 +72,7 @@ func NewLoadGenerator(sender DataSender) (*LoadGenerator, error) {
 	}
 
 	lg := &LoadGenerator{
+		random:     rand.New(rand.NewSource(99)),
 		stopSignal: make(chan struct{}),
 		sender:     sender,
 	}
@@ -152,6 +156,14 @@ func (lg *LoadGenerator) generate() {
 	lg.sender.Flush()
 }
 
+func (lg *LoadGenerator) genRandByteString(len int) string {
+	b := make([]byte, len)
+	for i := range b {
+		b[i] = byte(lg.random.Intn(10) + 33)
+	}
+	return string(b)
+}
+
 func (lg *LoadGenerator) generateTrace() {
 
 	traceSender := lg.sender.(TraceDataSender)
@@ -182,6 +194,18 @@ func (lg *LoadGenerator) generateTrace() {
 			},
 			StartTime: timeToTimestamp(startTime),
 			EndTime:   timeToTimestamp(startTime.Add(time.Duration(time.Millisecond))),
+		}
+
+		const attrsPerSpan = 4
+		for j := len(span.Attributes.AttributeMap); j < attrsPerSpan; j++ {
+			attrName := lg.genRandByteString(lg.random.Intn(50) + 1)
+			span.Attributes.AttributeMap[attrName] = &tracepb.AttributeValue{
+				Value: &tracepb.AttributeValue_StringValue{
+					StringValue: &tracepb.TruncatableString{
+						Value: lg.genRandByteString(lg.random.Intn(20) + 1),
+					},
+				},
+			}
 		}
 
 		// Append attributes.

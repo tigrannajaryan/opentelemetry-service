@@ -45,7 +45,12 @@ processors:
   batch:
   queued_retry:
 
+extensions:
+  pprof:
+    endpoint: "0.0.0.0:1777"
+
 service:
+  extensions: [pprof]
   pipelines:
     traces:
       receivers: [%v]
