@@ -67,6 +67,16 @@ func (f *Factory) CreateTraceExporter(logger *zap.Logger, config configmodels.Ex
 	return NewTraceExporter(logger, config, opts...)
 }
 
+// CreateTraceExporter creates a trace exporter based on this config.
+func (f *Factory) CreateOTLPTraceExporter(logger *zap.Logger, config configmodels.Exporter) (exporter.OTLPTraceExporter, error) {
+	ocac := config.(*Config)
+	opts, err := f.OCAgentOptions(logger, ocac)
+	if err != nil {
+		return nil, err
+	}
+	return NewTraceExporter(logger, config, opts...)
+}
+
 // OCAgentOptions takes the oc exporter Config and generates ocagent Options
 func (f *Factory) OCAgentOptions(logger *zap.Logger, ocac *Config) ([]ClientOption, error) {
 	if ocac.Endpoint == "" {
