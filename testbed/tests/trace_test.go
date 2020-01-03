@@ -22,6 +22,7 @@ package tests
 
 import (
 	"path"
+	"strconv"
 	"testing"
 
 	"github.com/open-telemetry/opentelemetry-collector/testbed/testbed"
@@ -77,16 +78,19 @@ func TestTrace10kSPS(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			Scenario10kItemsPerSecond(
-				t,
-				test.sender,
-				test.receiver,
-				testbed.LoadOptions{ItemsPerBatch: 1000},
-				test.resourceSpec,
-			)
-		})
+	batchSizes := []uint{1000, 100, 10}
+	for _, batchSize := range batchSizes {
+		for _, test := range tests {
+			t.Run(test.name+"/Batch"+strconv.Itoa(int(batchSize)), func(t *testing.T) {
+				Scenario10kItemsPerSecond(
+					t,
+					test.sender,
+					test.receiver,
+					testbed.LoadOptions{ItemsPerBatch: batchSize},
+					test.resourceSpec,
+				)
+			})
+		}
 	}
 }
 
