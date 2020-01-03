@@ -57,8 +57,7 @@ service:
   pipelines:
     traces:
       receivers: [%v]
-#      processors: [batch,queued_retry]
-      processors: []
+      processors: [batch]
       exporters: [%v]
 `
 	} else {

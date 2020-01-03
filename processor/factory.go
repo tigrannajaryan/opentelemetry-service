@@ -50,6 +50,16 @@ type Factory interface {
 		cfg configmodels.Processor) (MetricsProcessor, error)
 }
 
+type ExtendedFactory interface {
+	Factory
+
+	// CreateOTLPTraceProcessor creates a trace receiver based on this config.
+	// If the receiver type does not support tracing or if the config is not valid
+	// error will be returned instead.
+	CreateOTLPTraceProcessor(logger *zap.Logger, nextConsumer consumer.OTLPTraceConsumer,
+		cfg configmodels.Processor) (OTLPTraceProcessor, error)
+}
+
 // Build takes a list of processor factories and returns a map of type map[string]Factory
 // with factory type as keys. It returns a non-nil error when more than one factories
 // have the same type.

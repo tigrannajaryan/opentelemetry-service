@@ -80,6 +80,9 @@ func (pb *PipelinesBuilder) buildPipeline(
 	pipelineCfg *configmodels.Pipeline,
 ) (*builtPipeline, error) {
 
+	pb.logger.Info("Building pipeline...", zap.String("pipeline", pipelineCfg.Name),
+		zap.Int("processors", len(pipelineCfg.Processors)))
+
 	// Build the pipeline backwards.
 
 	// First create a consumer junction point that fans out the data to all exporters.
@@ -105,6 +108,8 @@ func (pb *PipelinesBuilder) buildPipeline(
 
 		factory := pb.factories[procCfg.Type()]
 
+		pb.logger.Info("Building processor", zap.String("processor", procName))
+
 		// This processor must point to the next consumer and then
 		// it becomes the next for the previous one (previous in the pipeline,
 		// which we will build in the next loop iteration).
@@ -112,7 +117,14 @@ func (pb *PipelinesBuilder) buildPipeline(
 		switch pipelineCfg.InputType {
 		case configmodels.TracesDataType:
 			var proc processor.TraceProcessor
-			proc, err = factory.CreateTraceProcessor(pb.logger, tc, procCfg)
+
+			tcOTLP, nextIsOTLP := tc.(consumer.OTLPTraceConsumer)
+
+			if extFactory, ok := factory.(processor.ExtendedFactory); ok && nextIsOTLP {
+				proc, err = extFactory.CreateOTLPTraceProcessor(pb.logger, tcOTLP, procCfg)
+			} else {
+				proc, err = factory.CreateTraceProcessor(pb.logger, tc, procCfg)
+			}
 			if proc != nil {
 				mutatesConsumedData = mutatesConsumedData || proc.GetCapabilities().MutatesConsumedData
 			}
@@ -137,7 +149,7 @@ func (pb *PipelinesBuilder) buildPipeline(
 		}
 	}
 
-	pb.logger.Info("Pipeline is enabled.", zap.String("pipelines", pipelineCfg.Name))
+	pb.logger.Info("Pipeline is enabled.", zap.String("pipeline", pipelineCfg.Name))
 
 	return &builtPipeline{tc, mc, mutatesConsumedData}, nil
 }

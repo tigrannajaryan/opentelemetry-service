@@ -39,30 +39,30 @@ func TestTrace10kSPS(t *testing.T) {
 		receiver     testbed.DataReceiver
 		resourceSpec testbed.ResourceSpec
 	}{
-		//{
-		//	"JaegerGrpc",
-		//	testbed.NewJaegerGrpcDataSender(testbed.GetAvailablePort(t)),
-		//	testbed.NewJaegerGrpcDataReceiver(testbed.GetAvailablePort(t)),
-		//	testbed.ResourceSpec{
-		//		ExpectedMaxCPU: 152,
-		//		ExpectedMaxRAM: 1189,
-		//	},
-		//},
-		//{
-		//	"JaegerThrift",
-		//	testbed.NewJaegerThriftDataSender(testbed.GetAvailablePort(t)),
-		//	testbed.NewJaegerDataReceiver(testbed.GetAvailablePort(t)),
-		//	testbed.ResourceSpec{
-		//		ExpectedMaxCPU: 52,
-		//		ExpectedMaxRAM: 1189,
-		//	},
-		//},
+		{
+			"JaegerGrpc",
+			testbed.NewJaegerGrpcDataSender(testbed.GetAvailablePort(t)),
+			testbed.NewJaegerGrpcDataReceiver(testbed.GetAvailablePort(t)),
+			testbed.ResourceSpec{
+				ExpectedMaxCPU: 1152,
+				ExpectedMaxRAM: 1189,
+			},
+		},
+		{
+			"JaegerThrift",
+			testbed.NewJaegerThriftDataSender(testbed.GetAvailablePort(t)),
+			testbed.NewJaegerDataReceiver(testbed.GetAvailablePort(t)),
+			testbed.ResourceSpec{
+				ExpectedMaxCPU: 1152,
+				ExpectedMaxRAM: 1189,
+			},
+		},
 		{
 			"OpenCensus",
 			testbed.NewOCTraceDataSender(testbed.GetAvailablePort(t)),
 			testbed.NewOCDataReceiver(testbed.GetAvailablePort(t)),
 			testbed.ResourceSpec{
-				ExpectedMaxCPU: 42,
+				ExpectedMaxCPU: 1142,
 				ExpectedMaxRAM: 1184,
 			},
 		},
@@ -71,7 +71,7 @@ func TestTrace10kSPS(t *testing.T) {
 			testbed.NewOTLPTraceDataSender(testbed.GetAvailablePort(t)),
 			testbed.NewOTLPDataReceiver(testbed.GetAvailablePort(t)),
 			testbed.ResourceSpec{
-				ExpectedMaxCPU: 42,
+				ExpectedMaxCPU: 1142,
 				ExpectedMaxRAM: 1184,
 			},
 		},
@@ -83,7 +83,7 @@ func TestTrace10kSPS(t *testing.T) {
 				t,
 				test.sender,
 				test.receiver,
-				testbed.LoadOptions{ItemsPerBatch: 100},
+				testbed.LoadOptions{ItemsPerBatch: 1000},
 				test.resourceSpec,
 			)
 		})

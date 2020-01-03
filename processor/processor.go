@@ -35,6 +35,11 @@ type TraceProcessor interface {
 	Processor
 }
 
+type OTLPTraceProcessor interface {
+	TraceProcessor
+	consumer.OTLPTraceConsumer
+}
+
 // MetricsProcessor composes MetricsConsumer with some additional processor-specific functions.
 type MetricsProcessor interface {
 	consumer.MetricsConsumer

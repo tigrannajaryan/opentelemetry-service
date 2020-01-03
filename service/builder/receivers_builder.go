@@ -160,10 +160,12 @@ func (rb *ReceiversBuilder) attachReceiverToPipelines(
 		// First, create the fan out junction point.
 		junction := buildFanoutTraceConsumer(builtPipelines)
 
-		if extFactory, ok := factory.(receiver.ExtendedFactory); ok {
+		junctionOTLP, nextIsOTLP := junction.(consumer.OTLPTraceConsumer)
+
+		if extFactory, ok := factory.(receiver.ExtendedFactory); ok && nextIsOTLP {
 			// Now create the receiver and tell it to send to the junction point.
 			createdReceiver, err = extFactory.CreateOTLPTraceReceiver(
-				context.Background(), rb.logger, config, junction.(consumer.OTLPTraceConsumer))
+				context.Background(), rb.logger, config, junctionOTLP)
 		} else {
 			// Now create the receiver and tell it to send to the junction point.
 			createdReceiver, err = factory.CreateTraceReceiver(context.Background(), rb.logger, config, junction)

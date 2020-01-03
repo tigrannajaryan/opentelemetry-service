@@ -63,6 +63,8 @@ func (f *Factory) CreateTraceProcessor(
 	nextConsumer consumer.TraceConsumer,
 	c configmodels.Processor,
 ) (processor.TraceProcessor, error) {
+	logger.Info("batcher.CreateTraceProcessor")
+
 	cfg := c.(*Config)
 
 	var batchingOptions []Option
@@ -91,6 +93,16 @@ func (f *Factory) CreateTraceProcessor(
 	}
 
 	return NewBatcher(cfg.NameVal, logger, nextConsumer, batchingOptions...), nil
+}
+
+// CreateOTLPTraceProcessor creates a trace receiver based on this config.
+// If the receiver type does not support tracing or if the config is not valid
+// error will be returned instead.
+func (f *Factory) CreateOTLPTraceProcessor(logger *zap.Logger, nextConsumer consumer.OTLPTraceConsumer,
+	c configmodels.Processor) (processor.OTLPTraceProcessor, error) {
+	logger.Info("batcher.CreateOTLPTraceProcessor")
+	cfg := c.(*Config)
+	return NewOTLPBatcher(cfg.NameVal, logger, nextConsumer), nil
 }
 
 // CreateMetricsProcessor creates a metrics processor based on this config.
