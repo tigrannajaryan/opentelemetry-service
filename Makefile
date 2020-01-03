@@ -39,6 +39,9 @@ all-srcs:
 .PHONY: all
 all: addlicense impi lint misspell test otelcol
 
+generate:
+	protoc -I/usr/local/include -I exporter/otlpexporter/ exporter/otlpexporter/otlp_stream.proto --go_out=plugins=grpc:exporter/otlpexporter
+
 .PHONY: e2e-test
 e2e-test: otelcol
 	$(MAKE) -C testbed runtests

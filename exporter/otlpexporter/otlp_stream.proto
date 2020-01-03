@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package otlp;
+
+import "github.com/open-telemetry/opentelemetry-proto/opentelemetry/proto/agent/trace/v1/trace_service.proto";
+
+// Streaming exporter service definition.
+service TraceServiceStream {
+    rpc Export(stream ExportTraceServiceRequest) returns (stream ExportTraceServiceResponse) {}
+}
+
