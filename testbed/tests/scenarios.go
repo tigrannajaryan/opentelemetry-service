@@ -49,7 +49,6 @@ processors:
 
 extensions:
   pprof:
-    endpoint: "0.0.0.0:1777"
     save_to_file: %v/cpu.prof
 
 service:
@@ -66,7 +65,12 @@ service:
 receivers:%v
 exporters:%v
 
+extensions:
+  pprof:
+    save_to_file: %v/cpu.prof
+
 service:
+  extensions: [pprof]
   pipelines:
     metrics:
       receivers: [%v]
