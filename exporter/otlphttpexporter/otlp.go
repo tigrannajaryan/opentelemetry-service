@@ -21,6 +21,7 @@ import (
 
 	"go.opentelemetry.io/collector/config/configmodels"
 	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/exporter/otlphttpexporter/httpclient"
 	"go.opentelemetry.io/collector/internal"
 	otlplogs "go.opentelemetry.io/collector/internal/data/opentelemetry-proto-gen/collector/logs/v1"
 	otlpmetrics "go.opentelemetry.io/collector/internal/data/opentelemetry-proto-gen/collector/metrics/v1"
@@ -99,10 +100,29 @@ func (e *exporterImp) pushLogData(ctx context.Context, logs pdata.Logs) (int, er
 }
 
 type httpSender struct {
+	client *httpclient.Client
 }
 
 func newHTTPSender(config *Config) (sender, error) {
-	hs := &httpSender{}
+	err := config.validate()
+	if err != nil {
+		return nil, err
+	}
+
+	urls := httpclient.TargetUrls{
+		// TODO: make URL suffixes configurable.
+		Traces:  config.Endpoint + "/v1/traces",
+		Metrics: config.Endpoint + "/v1/metrics",
+		Logs:    config.Endpoint + "/v1/logs",
+	}
+	client, err := httpclient.New(urls, config.clientOptions()...)
+	if err != nil {
+		return nil, err
+	}
+
+	hs := &httpSender{
+		client: client,
+	}
 	return hs, nil
 }
 
@@ -111,13 +131,13 @@ func (hs *httpSender) stop() error {
 }
 
 func (hs *httpSender) exportTrace(ctx context.Context, request *otlptrace.ExportTraceServiceRequest) error {
-	return nil
+	return hs.client.ExportTraces(ctx, request)
 }
 
 func (hs *httpSender) exportMetrics(ctx context.Context, request *otlpmetrics.ExportMetricsServiceRequest) error {
-	return nil
+	return hs.client.ExportMetrics(ctx, request)
 }
 
 func (hs *httpSender) exportLogs(ctx context.Context, request *otlplogs.ExportLogsServiceRequest) error {
-	return nil
+	return hs.client.ExportLogs(ctx, request)
 }

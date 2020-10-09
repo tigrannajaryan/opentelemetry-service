@@ -5,7 +5,11 @@ Exports traces and/or metrics via HTTP using
 
 The following settings are required:
 
-- `endpoint` (no default): The target URL to send data to (e.g.: https://example.com:55681/v1/traces).
+- `endpoint` (no default): The target URL prefix to send data to (e.g.: https://example.com:55681).
+  The prefix will be appended with a suffix that corresponds to the data type that is sent:
+  For traces /v1/traces will be appended, for metrics /v1/metrics will be appended, for
+  logs /v1/logs will be appended to the `endpoint` to compose the final URL where the
+  OTLP/HTTP POST request will be made. 
 
 The following settings can be optionally configured:
 

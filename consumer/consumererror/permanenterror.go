@@ -33,6 +33,16 @@ func (p permanent) Error() string {
 	return "Permanent error: " + p.err.Error()
 }
 
+func UnwrapPermanent(err error) error {
+	if err != nil {
+		pErr, isPermanent := err.(permanent)
+		if isPermanent {
+			return pErr.err
+		}
+	}
+	return nil
+}
+
 // IsPermanent checks if an error was wrapped with the Permanent function, that
 // is used to indicate that a given error will always be returned in the case
 // that its sources receives the same input.
