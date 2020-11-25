@@ -23,6 +23,7 @@ import (
 
 	"go.opentelemetry.io/collector/config/configmodels"
 	"go.opentelemetry.io/collector/config/configtelemetry"
+	"go.opentelemetry.io/collector/translator/conventions"
 )
 
 const (
@@ -295,6 +296,11 @@ func traceReceiveOp(
 	if transport != "" {
 		span.AddAttributes(trace.StringAttribute(TransportKey, transport))
 	}
+
+	span.AddAttributes(
+		trace.StringAttribute(conventions.AttributeServiceName, "receiver/"+receiverName),
+	)
+
 	return ctx
 }
 

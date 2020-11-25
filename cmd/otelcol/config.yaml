@@ -34,9 +34,21 @@ receivers:
 processors:
   batch:
 
+  attributes/addenv:
+    actions:
+      - key: "environment"
+        value: tigrantest
+        action: upsert
+
 exporters:
-  logging:
+  logging/metrics:
+  logging/traces:
     logLevel: debug
+  otlphttp:
+    traces_endpoint: "http://internal-alb-lab0-internal-ingest-1517876229.us-east-1.elb.amazonaws.com/v2/trace/otlp"
+    headers:
+      X-SF-Token: qecVh09hjOsJuZ9GqqcGQw
+
 
 service:
 
@@ -44,12 +56,12 @@ service:
 
     traces:
       receivers: [otlp, opencensus, jaeger, zipkin]
-      processors: [batch]
-      exporters: [logging]
+      processors: [attributes/addenv]
+      exporters: [logging/traces,otlphttp]
 
     metrics:
       receivers: [otlp, opencensus, prometheus]
       processors: [batch]
-      exporters: [logging]
+      exporters: [logging/metrics]
 
   extensions: [health_check, pprof, zpages]

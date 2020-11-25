@@ -22,6 +22,7 @@ import (
 	"go.opencensus.io/trace"
 
 	"go.opentelemetry.io/collector/config/configtelemetry"
+	"go.opentelemetry.io/collector/translator/conventions"
 )
 
 const (
@@ -153,7 +154,10 @@ func (eor *ExporterObsReport) EndLogsExportOp(ctx context.Context, numLogRecords
 // the updated context and the created span.
 func (eor *ExporterObsReport) startSpan(ctx context.Context, operationSuffix string) context.Context {
 	spanName := exporterPrefix + eor.exporterName + operationSuffix
-	ctx, _ = trace.StartSpan(ctx, spanName)
+	ctx, span := trace.StartSpan(ctx, spanName)
+	span.AddAttributes(
+		trace.StringAttribute(conventions.AttributeServiceName, "exporter/"+eor.exporterName),
+	)
 	return ctx
 }
 

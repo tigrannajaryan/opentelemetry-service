@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	occommon "github.com/census-instrumentation/opencensus-proto/gen-go/agent/common/v1"
+	ocresource "github.com/census-instrumentation/opencensus-proto/gen-go/resource/v1"
 	octrace "github.com/census-instrumentation/opencensus-proto/gen-go/trace/v1"
 	"go.opencensus.io/trace"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -72,6 +73,12 @@ func OCToTraceData(td consumerdata.TraceData) pdata.Traces {
 			// Skip nil spans.
 			continue
 		}
+
+		// Temporary hack to put service.name in the Resource so that SFx backend honours it.
+		ocSpan.Resource = &ocresource.Resource{
+			Labels: map[string]string{"service.name": ocSpan.Attributes.AttributeMap["service.name"].GetStringValue().GetValue()},
+		}
+
 		if ocSpan.Resource == nil {
 			combinedSpanCount++
 		} else {

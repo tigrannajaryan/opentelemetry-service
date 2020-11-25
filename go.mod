@@ -3,6 +3,7 @@ module go.opentelemetry.io/collector
 go 1.14
 
 require (
+	contrib.go.opencensus.io/exporter/ocagent v0.7.0
 	contrib.go.opencensus.io/exporter/prometheus v0.2.0
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/Shopify/sarama v1.27.2

@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/collector/config/configmodels"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/consumer/consumererror"
+	"go.opentelemetry.io/collector/translator/conventions"
 )
 
 const (
@@ -87,7 +88,11 @@ func StartMetricsScrapeOp(
 	}
 
 	spanName := scraperPrefix + scraperName + scraperMetricsOperationSuffix
-	ctx, _ := trace.StartSpan(scraperCtx, spanName)
+	ctx, span := trace.StartSpan(scraperCtx, spanName)
+	span.AddAttributes(
+		trace.StringAttribute(conventions.AttributeServiceName, "scraper/"+scraperName),
+	)
+
 	return ctx
 }
 

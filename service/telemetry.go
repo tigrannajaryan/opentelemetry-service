@@ -19,9 +19,11 @@ import (
 	"strings"
 	"unicode"
 
+	"contrib.go.opencensus.io/exporter/ocagent"
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/google/uuid"
 	"go.opencensus.io/stats/view"
+	"go.opencensus.io/trace"
 	"go.uber.org/zap"
 
 	"go.opentelemetry.io/collector/config/configtelemetry"
@@ -119,6 +121,36 @@ func (tel *appTelemetry) init(asyncErrorChannel chan<- error, ballastSizeBytes u
 			asyncErrorChannel <- serveErr
 		}
 	}()
+
+	if err := tel.setupTraces(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type SpanExporter struct {
+	wrapped trace.Exporter
+}
+
+func (se *SpanExporter) ExportSpan(s *trace.SpanData) {
+	se.wrapped.ExportSpan(s)
+}
+
+func (tel *appTelemetry) setupTraces() error {
+
+	ocAgentAddr := "localhost:55678"
+	oce, err := ocagent.NewExporter(
+		ocagent.WithAddress(ocAgentAddr),
+		ocagent.WithInsecure())
+	if err != nil {
+		return err
+	}
+
+	trace.RegisterExporter(oce)
+
+	// 2. Configure 100% sample rate, otherwise, few traces will be sampled.
+	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
 
 	return nil
 }
