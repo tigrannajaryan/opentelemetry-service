@@ -49,6 +49,10 @@ exporters:
     headers:
       X-SF-Token: qecVh09hjOsJuZ9GqqcGQw
 
+  otlphttp/metrics:
+    metrics_endpoint: "http://localhost:1234"
+    retry_on_failure:
+      max_elapsed_time: 10s
 
 service:
 
@@ -62,6 +66,6 @@ service:
     metrics:
       receivers: [otlp, opencensus, prometheus]
       processors: [batch]
-      exporters: [logging/metrics]
+      exporters: [logging/metrics, otlphttp/metrics]
 
   extensions: [health_check, pprof, zpages]
