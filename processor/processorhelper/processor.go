@@ -27,6 +27,7 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/pdata"
 	"go.opentelemetry.io/collector/obsreport"
+	"go.opentelemetry.io/collector/translator/conventions"
 )
 
 // ErrSkipProcessingData is a sentinel value to indicate when traces or metrics should intentionally be dropped
@@ -136,11 +137,21 @@ type tracesProcessor struct {
 }
 
 func (tp *tracesProcessor) ConsumeTraces(ctx context.Context, td pdata.Traces) error {
-	span := trace.FromContext(ctx)
-	span.Annotate(tp.traceAttributes, "Start processing.")
+	//span := trace.FromContext(ctx)
+	//span.Annotate(tp.traceAttributes, "Start processing.")
+
+	spanName := tp.fullName
+	ctx, span := trace.StartSpan(ctx, spanName)
+	span.AddAttributes(
+		trace.StringAttribute(conventions.AttributeServiceName, "processor/"+tp.fullName),
+	)
+
 	var err error
 	td, err = tp.processor.ProcessTraces(ctx, td)
-	span.Annotate(tp.traceAttributes, "End processing.")
+	//span.Annotate(tp.traceAttributes, "End processing.")
+
+	span.End()
+
 	if err != nil {
 		return err
 	}
