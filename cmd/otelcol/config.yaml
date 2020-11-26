@@ -22,6 +22,18 @@ receivers:
         static_configs:
         - targets: ['0.0.0.0:8888']
 
+  hostmetrics:
+    collection_interval: 1s
+    scrapers:
+      cpu:
+      load:
+      memory:
+      disk:
+      filesystem:
+      network:
+      processes:
+      swap:
+
   jaeger:
     protocols:
       grpc:
@@ -44,10 +56,16 @@ processors:
         value: tigrantest
         action: upsert
 
-  attributes/addenvself:
+  attributes/envself:
     actions:
       - key: "environment"
         value: tigrantest
+        action: upsert
+
+  resource/ns:
+    attributes:
+      - key: "service.namespace"
+        value: otelcol-agent
         action: upsert
 
 exporters:
@@ -75,7 +93,7 @@ service:
 
     traces/selfreport:
       receivers: [opencensus]
-      processors: [attributes/addenvself]
+      processors: [attributes/envself, resource/ns]
       exporters: [otlphttp]
 
     metrics:
