@@ -32,7 +32,10 @@ receivers:
   zipkin:
 
 processors:
-  batch:
+  batch/traces:
+    timeout: 10s
+
+  batch/metrics:
     timeout: 10s
 
   attributes/addenv:
@@ -41,10 +44,16 @@ processors:
         value: tigrantest
         action: upsert
 
+  attributes/addenvself:
+    actions:
+      - key: "environment"
+        value: tigrantest
+        action: upsert
+
 exporters:
   logging/metrics:
   logging/traces:
-    logLevel: debug
+#    logLevel: debug
   otlphttp:
     traces_endpoint: "http://internal-alb-lab0-internal-ingest-1517876229.us-east-1.elb.amazonaws.com/v2/trace/otlp"
     headers:
@@ -60,13 +69,18 @@ service:
   pipelines:
 
     traces:
-      receivers: [otlp, opencensus, jaeger, zipkin]
-      processors: [attributes/addenv]
-      exporters: [logging/traces,otlphttp]
+      receivers: [otlp, jaeger, zipkin]
+      processors: [batch/traces, attributes/addenv]
+      exporters: [logging/traces]
+
+    traces/selfreport:
+      receivers: [opencensus]
+      processors: [attributes/addenvself]
+      exporters: [otlphttp]
 
     metrics:
       receivers: [otlp, opencensus, prometheus]
-      processors: [batch]
+      processors: [batch/metrics]
       exporters: [logging/metrics, otlphttp/metrics]
 
   extensions: [health_check, pprof, zpages]

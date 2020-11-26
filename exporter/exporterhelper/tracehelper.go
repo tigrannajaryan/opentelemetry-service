@@ -65,7 +65,7 @@ type traceExporter struct {
 func (texp *traceExporter) ConsumeTraces(ctx context.Context, td pdata.Traces) error {
 	exporterCtx := obsreport.ExporterContext(ctx, texp.cfg.Name())
 	req := newTracesRequest(exporterCtx, td, texp.pusher)
-	_, err := texp.sender.send(req)
+	_, err := texp.sender.send(exporterCtx, req)
 	return err
 }
 
@@ -108,10 +108,10 @@ type tracesExporterWithObservability struct {
 	nextSender requestSender
 }
 
-func (tewo *tracesExporterWithObservability) send(req request) (int, error) {
-	req.setContext(tewo.obsrep.StartTracesExportOp(req.context()))
+func (tewo *tracesExporterWithObservability) send(ctx context.Context, req request) (int, error) {
+	req.setContext(tewo.obsrep.StartTracesExportOp(ctx))
 	// Forward the data to the next consumer (this pusher is the next).
-	droppedSpans, err := tewo.nextSender.send(req)
+	droppedSpans, err := tewo.nextSender.send(ctx, req)
 
 	// TODO: this is not ideal: it should come from the next function itself.
 	// 	temporarily loading it from internal format. Once full switch is done

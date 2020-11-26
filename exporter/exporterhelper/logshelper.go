@@ -64,7 +64,7 @@ type logsExporter struct {
 
 func (lexp *logsExporter) ConsumeLogs(ctx context.Context, ld pdata.Logs) error {
 	exporterCtx := obsreport.ExporterContext(ctx, lexp.cfg.Name())
-	_, err := lexp.sender.send(newLogsRequest(exporterCtx, ld, lexp.pusher))
+	_, err := lexp.sender.send(exporterCtx, newLogsRequest(exporterCtx, ld, lexp.pusher))
 	return err
 }
 
@@ -106,9 +106,9 @@ type logsExporterWithObservability struct {
 	nextSender requestSender
 }
 
-func (lewo *logsExporterWithObservability) send(req request) (int, error) {
-	req.setContext(lewo.obsrep.StartLogsExportOp(req.context()))
-	numDroppedLogs, err := lewo.nextSender.send(req)
+func (lewo *logsExporterWithObservability) send(ctx context.Context, req request) (int, error) {
+	req.setContext(lewo.obsrep.StartLogsExportOp(ctx))
+	numDroppedLogs, err := lewo.nextSender.send(ctx, req)
 	lewo.obsrep.EndLogsExportOp(req.context(), req.count(), err)
 	return numDroppedLogs, err
 }

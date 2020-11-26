@@ -59,7 +59,7 @@ type request interface {
 
 // requestSender is an abstraction of a sender for a request independent of the type of the data (traces, metrics, logs).
 type requestSender interface {
-	send(req request) (int, error)
+	send(ctx context.Context, req request) (int, error)
 }
 
 // baseRequest is a base implementation for the request.
@@ -210,10 +210,9 @@ type timeoutSender struct {
 }
 
 // send implements the requestSender interface
-func (ts *timeoutSender) send(req request) (int, error) {
+func (ts *timeoutSender) send(ctx context.Context, req request) (int, error) {
 	// Intentionally don't overwrite the context inside the request, because in case of retries deadline will not be
 	// updated because this deadline most likely is before the next one.
-	ctx := req.context()
 	if ts.cfg.Timeout > 0 {
 		var cancelFunc func()
 		ctx, cancelFunc = context.WithTimeout(req.context(), ts.cfg.Timeout)

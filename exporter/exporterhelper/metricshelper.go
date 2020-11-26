@@ -69,7 +69,7 @@ func (mexp *metricsExporter) ConsumeMetrics(ctx context.Context, md pdata.Metric
 	}
 	exporterCtx := obsreport.ExporterContext(ctx, mexp.cfg.Name())
 	req := newMetricsRequest(exporterCtx, md, mexp.pusher)
-	_, err := mexp.sender.send(req)
+	_, err := mexp.sender.send(exporterCtx, req)
 	return err
 }
 
@@ -111,9 +111,9 @@ type metricsSenderWithObservability struct {
 	nextSender requestSender
 }
 
-func (mewo *metricsSenderWithObservability) send(req request) (int, error) {
-	req.setContext(mewo.obsrep.StartMetricsExportOp(req.context()))
-	_, err := mewo.nextSender.send(req)
+func (mewo *metricsSenderWithObservability) send(ctx context.Context, req request) (int, error) {
+	req.setContext(mewo.obsrep.StartMetricsExportOp(ctx))
+	_, err := mewo.nextSender.send(ctx, req)
 
 	// TODO: this is not ideal: it should come from the next function itself.
 	// 	temporarily loading it from internal format. Once full switch is done

@@ -28,6 +28,7 @@ import (
 
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/obsreport"
+	"go.opentelemetry.io/collector/translator/conventions"
 )
 
 // QueueSettings defines configuration for queueing batches before sending to the consumerSender.
@@ -85,6 +86,7 @@ type queuedRetrySender struct {
 	retryStopCh     chan struct{}
 	traceAttributes []trace.Attribute
 	logger          *zap.Logger
+	fullName        string
 }
 
 func createSampledLogger(logger *zap.Logger) *zap.Logger {
@@ -118,11 +120,13 @@ func newQueuedRetrySender(fullName string, qCfg QueueSettings, rCfg RetrySetting
 			nextSender:     nextSender,
 			stopCh:         retryStopCh,
 			logger:         sampledLogger,
+			fullName:       fullName,
 		},
 		queue:           queue.NewBoundedQueue(qCfg.QueueSize, func(item interface{}) {}),
 		retryStopCh:     retryStopCh,
 		traceAttributes: []trace.Attribute{traceAttr},
 		logger:          sampledLogger,
+		fullName:        fullName,
 	}
 }
 
@@ -130,14 +134,14 @@ func newQueuedRetrySender(fullName string, qCfg QueueSettings, rCfg RetrySetting
 func (qrs *queuedRetrySender) start() {
 	qrs.queue.StartConsumers(qrs.cfg.NumConsumers, func(item interface{}) {
 		req := item.(request)
-		_, _ = qrs.consumerSender.send(req)
+		_, _ = qrs.consumerSender.send(req.context(), req)
 	})
 }
 
 // send implements the requestSender interface
-func (qrs *queuedRetrySender) send(req request) (int, error) {
+func (qrs *queuedRetrySender) send(ctx context.Context, req request) (int, error) {
 	if !qrs.cfg.Enabled {
-		n, err := qrs.consumerSender.send(req)
+		n, err := qrs.consumerSender.send(ctx, req)
 		if err != nil {
 			qrs.logger.Error(
 				"Exporting failed. Dropping data. Try enabling sending_queue to survive temporary failures.",
@@ -151,7 +155,7 @@ func (qrs *queuedRetrySender) send(req request) (int, error) {
 	// The grpc/http based receivers will cancel the request context after this function returns.
 	req.setContext(noCancellationContext{Context: req.context()})
 
-	span := trace.FromContext(req.context())
+	span := trace.FromContext(ctx)
 	if !qrs.queue.Produce(req) {
 		qrs.logger.Error(
 			"Dropping data because sending_queue is full. Try increasing queue_size.",
@@ -194,12 +198,13 @@ type retrySender struct {
 	nextSender     requestSender
 	stopCh         chan struct{}
 	logger         *zap.Logger
+	fullName       string
 }
 
 // send implements the requestSender interface
-func (rs *retrySender) send(req request) (int, error) {
+func (rs *retrySender) send(ctx context.Context, req request) (int, error) {
 	if !rs.cfg.Enabled {
-		n, err := rs.nextSender.send(req)
+		n, err := rs.nextSender.send(ctx, req)
 		if err != nil {
 			rs.logger.Error(
 				"Exporting failed. Try enabling retry_on_failure config option.",
@@ -220,7 +225,9 @@ func (rs *retrySender) send(req request) (int, error) {
 		Clock:               backoff.SystemClock,
 	}
 	expBackoff.Reset()
-	span := trace.FromContext(req.context())
+	ctx, span := trace.StartSpan(req.context(), "send")
+	span.AddAttributes(trace.StringAttribute(conventions.AttributeServiceName, "retrier/"+rs.fullName))
+	defer span.End()
 	retryNum := int64(0)
 	for {
 		span.Annotate(
@@ -228,7 +235,7 @@ func (rs *retrySender) send(req request) (int, error) {
 				rs.traceAttribute,
 				trace.Int64Attribute("retry_num", retryNum)},
 			"Sending request.")
-		droppedItems, err := rs.nextSender.send(req)
+		droppedItems, err := rs.nextSender.send(ctx, req)
 
 		if err == nil {
 			return droppedItems, nil
@@ -241,6 +248,7 @@ func (rs *retrySender) send(req request) (int, error) {
 				zap.Error(err),
 				zap.Int("dropped_items", droppedItems),
 			)
+			span.SetStatus(errToStatus(err))
 			return droppedItems, err
 		}
 
@@ -259,6 +267,7 @@ func (rs *retrySender) send(req request) (int, error) {
 				zap.Error(err),
 				zap.Int("dropped_items", droppedItems),
 			)
+			span.SetStatus(errToStatus(err))
 			return req.count(), err
 		}
 
@@ -289,6 +298,13 @@ func (rs *retrySender) send(req request) (int, error) {
 		case <-time.After(backoffDelay):
 		}
 	}
+}
+
+func errToStatus(err error) trace.Status {
+	if err != nil {
+		return trace.Status{Code: trace.StatusCodeUnknown, Message: err.Error()}
+	}
+	return okStatus
 }
 
 // max returns the larger of x or y.
