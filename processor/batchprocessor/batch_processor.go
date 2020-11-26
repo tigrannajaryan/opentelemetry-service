@@ -172,7 +172,7 @@ func (bp *batchProcessor) processItem(item itemStruct) {
 	}
 
 	if bp.span == nil {
-		ctx, span := trace.StartSpan(item.ctx, "send_batch")
+		ctx, span := trace.StartSpan(item.ctx, "accumulate_batch")
 		bp.span = span
 		bp.spanCtx = ctx
 		span.AddAttributes(
@@ -207,9 +207,14 @@ func (bp *batchProcessor) sendItems(measure *stats.Int64Measure) {
 		_ = stats.RecordWithTags(context.Background(), statsTags, statBatchSendSizeBytes.M(int64(bp.batch.size())))
 	}
 
-	if err := bp.batch.export(bp.spanCtx); err != nil {
+	ctx, span := trace.StartSpan(bp.spanCtx, "send_batch")
+	span.AddAttributes(
+		trace.StringAttribute(conventions.AttributeServiceName, "processor/"+bp.name),
+	)
+	if err := bp.batch.export(ctx); err != nil {
 		bp.logger.Warn("Sender failed", zap.Error(err))
 	}
+	span.End()
 
 	bp.batch.reset()
 
