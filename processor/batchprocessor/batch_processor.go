@@ -54,9 +54,10 @@ type batchProcessor struct {
 	newItem chan itemStruct
 	batch   batch
 
-	ctx        context.Context
-	cancel     context.CancelFunc
-	lastRcvCtx context.Context
+	ctx     context.Context
+	cancel  context.CancelFunc
+	span    *trace.Span
+	spanCtx context.Context
 }
 
 type itemStruct struct {
@@ -138,7 +139,7 @@ func (bp *batchProcessor) startProcessingCycle() {
 			if bp.batch.itemCount() > 0 {
 				// TODO: Set a timeout on sendTraces or
 				// make it cancellable using the context that Shutdown gets as a parameter
-				bp.sendItems(bp.lastRcvCtx, statTimeoutTriggerSend)
+				bp.sendItems(statTimeoutTriggerSend)
 			}
 			close(bp.done)
 			return
@@ -149,7 +150,7 @@ func (bp *batchProcessor) startProcessingCycle() {
 			bp.processItem(item)
 		case <-bp.timer.C:
 			if bp.batch.itemCount() > 0 {
-				bp.sendItems(bp.lastRcvCtx, statTimeoutTriggerSend)
+				bp.sendItems(statTimeoutTriggerSend)
 			}
 			bp.resetTimer()
 		}
@@ -170,14 +171,25 @@ func (bp *batchProcessor) processItem(item itemStruct) {
 		}
 	}
 
-	bp.lastRcvCtx = item.ctx
+	if bp.span == nil {
+		ctx, span := trace.StartSpan(item.ctx, "send_batch")
+		bp.span = span
+		bp.spanCtx = ctx
+		span.AddAttributes(
+			trace.StringAttribute(conventions.AttributeServiceName, "processor/"+bp.name),
+		)
+	}
 
 	bp.batch.add(item)
+
+	bp.span.Annotate([]trace.Attribute{
+		trace.StringAttribute("item", "added"),
+		trace.Int64Attribute("total_in_batch", int64(bp.batch.itemCount())),
+	}, "Item added to batch")
+
 	if bp.batch.itemCount() >= bp.sendBatchSize {
 		bp.timer.Stop()
-
-		bp.sendItems(item.ctx, statBatchSizeTriggerSend)
-
+		bp.sendItems(statBatchSizeTriggerSend)
 		bp.resetTimer()
 	}
 }
@@ -186,7 +198,7 @@ func (bp *batchProcessor) resetTimer() {
 	bp.timer.Reset(bp.timeout)
 }
 
-func (bp *batchProcessor) sendItems(ctx context.Context, measure *stats.Int64Measure) {
+func (bp *batchProcessor) sendItems(measure *stats.Int64Measure) {
 	// Add that it came form the trace pipeline?
 	statsTags := []tag.Mutator{tag.Insert(processor.TagProcessorNameKey, bp.name)}
 	_ = stats.RecordWithTags(context.Background(), statsTags, measure.M(1), statBatchSendSize.M(int64(bp.batch.itemCount())))
@@ -195,18 +207,15 @@ func (bp *batchProcessor) sendItems(ctx context.Context, measure *stats.Int64Mea
 		_ = stats.RecordWithTags(context.Background(), statsTags, statBatchSendSizeBytes.M(int64(bp.batch.size())))
 	}
 
-	ctx, span := trace.StartSpan(ctx, "send_batch")
-	span.AddAttributes(
-		trace.StringAttribute(conventions.AttributeServiceName, "processor/"+bp.name),
-	)
-
-	if err := bp.batch.export(ctx); err != nil {
+	if err := bp.batch.export(bp.spanCtx); err != nil {
 		bp.logger.Warn("Sender failed", zap.Error(err))
 	}
 
 	bp.batch.reset()
 
-	span.End()
+	bp.span.End()
+	bp.span = nil
+	bp.spanCtx = nil
 }
 
 // ConsumeTraces implements TracesProcessor
