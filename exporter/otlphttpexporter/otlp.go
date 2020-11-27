@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"time"
 
+	"go.opencensus.io/trace"
 	"go.uber.org/zap"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/proto"
@@ -34,6 +35,7 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/consumer/pdata"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
+	"go.opentelemetry.io/collector/translator/conventions"
 )
 
 type exporterImp struct {
@@ -117,6 +119,16 @@ func (e *exporterImp) pushLogData(ctx context.Context, logs pdata.Logs) (int, er
 }
 
 func (e *exporterImp) export(ctx context.Context, url string, request []byte) error {
+
+	ctx, span := trace.StartSpan(ctx, "http_request", trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute(conventions.AttributeServiceName, "exporter/"+e.config.Name()+"/client"),
+		trace.StringAttribute(conventions.AttributeHTTPMethod, http.MethodPost),
+		trace.StringAttribute(conventions.AttributeHTTPURL, url),
+	)
+
 	e.logger.Debug("Preparing to make HTTP request", zap.String("url", url))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(request))
 	if err != nil {
@@ -126,6 +138,7 @@ func (e *exporterImp) export(ctx context.Context, url string, request []byte) er
 
 	resp, err := e.client.Do(req)
 	if err != nil {
+		span.SetStatus(trace.Status{Code: trace.StatusCodeUnknown, Message: err.Error()})
 		return fmt.Errorf("failed to make an HTTP request: %w", err)
 	}
 
@@ -134,6 +147,8 @@ func (e *exporterImp) export(ctx context.Context, url string, request []byte) er
 		io.CopyN(ioutil.Discard, resp.Body, maxHTTPResponseReadBytes)
 		resp.Body.Close()
 	}()
+
+	span.AddAttributes(trace.Int64Attribute(conventions.AttributeHTTPStatusCode, int64(resp.StatusCode)))
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 		// Request is successful.
@@ -153,6 +168,8 @@ func (e *exporterImp) export(ctx context.Context, url string, request []byte) er
 			"error exporting items, request to %s responded with HTTP Status Code %d",
 			url, resp.StatusCode)
 	}
+
+	span.SetStatus(trace.Status{Code: trace.StatusCodeUnknown, Message: formattedErr.Error()})
 
 	// Check if the server is overwhelmed.
 	// See spec https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/protocol/otlp.md#throttling-1

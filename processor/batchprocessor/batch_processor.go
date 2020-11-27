@@ -261,7 +261,7 @@ type batchTraces struct {
 	nextConsumer consumer.TracesConsumer
 	traceData    pdata.Traces
 	spanCount    uint32
-	//lastCtx      context.Context
+	// lastCtx      context.Context
 }
 
 func newBatchTraces(nextConsumer consumer.TracesConsumer) *batchTraces {
@@ -278,7 +278,7 @@ func (bt *batchTraces) add(item itemStruct) {
 		return
 	}
 
-	//bt.lastCtx = item.ctx
+	// bt.lastCtx = item.ctx
 	bt.spanCount += uint32(newSpanCount)
 	td.ResourceSpans().MoveAndAppendTo(bt.traceData.ResourceSpans())
 }
@@ -305,7 +305,7 @@ type batchMetrics struct {
 	nextConsumer consumer.MetricsConsumer
 	metricData   pdata.Metrics
 	metricCount  uint32
-	//lastCtx      context.Context
+	// lastCtx      context.Context
 }
 
 func newBatchMetrics(nextConsumer consumer.MetricsConsumer) *batchMetrics {
@@ -340,7 +340,7 @@ func (bm *batchMetrics) add(item itemStruct) {
 		return
 	}
 
-	//bm.lastCtx = item.ctx
+	// bm.lastCtx = item.ctx
 	bm.metricCount += uint32(newMetricsCount)
 	md.ResourceMetrics().MoveAndAppendTo(bm.metricData.ResourceMetrics())
 }
@@ -349,7 +349,7 @@ type batchLogs struct {
 	nextConsumer consumer.LogsConsumer
 	logData      pdata.Logs
 	logCount     uint32
-	//lastCtx      context.Context
+	// lastCtx      context.Context
 }
 
 func newBatchLogs(nextConsumer consumer.LogsConsumer) *batchLogs {
@@ -383,7 +383,7 @@ func (bm *batchLogs) add(item itemStruct) {
 	if newLogsCount == 0 {
 		return
 	}
-	//bm.lastCtx = item.ctx
+	// bm.lastCtx = item.ctx
 	bm.logCount += uint32(newLogsCount)
 	ld.ResourceLogs().MoveAndAppendTo(bm.logData.ResourceLogs())
 }

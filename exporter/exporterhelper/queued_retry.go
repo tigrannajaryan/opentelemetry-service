@@ -226,7 +226,7 @@ func (rs *retrySender) send(ctx context.Context, req request) (int, error) {
 	}
 	expBackoff.Reset()
 	ctx, span := trace.StartSpan(req.context(), "send")
-	span.AddAttributes(trace.StringAttribute(conventions.AttributeServiceName, "retrier/"+rs.fullName))
+	span.AddAttributes(trace.StringAttribute(conventions.AttributeServiceName, "exporter/"+rs.fullName+"/retrier"))
 	defer span.End()
 	retryNum := int64(0)
 	for {

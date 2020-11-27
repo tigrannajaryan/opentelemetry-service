@@ -56,10 +56,3 @@ func TestBaseExporterWithOptions(t *testing.T) {
 	require.Equal(t, want, be.Start(context.Background(), componenttest.NewNopHost()))
 	require.Equal(t, want, be.Shutdown(context.Background()))
 }
-
-func errToStatus(err error) trace.Status {
-	if err != nil {
-		return trace.Status{Code: trace.StatusCodeUnknown, Message: err.Error()}
-	}
-	return okStatus
-}

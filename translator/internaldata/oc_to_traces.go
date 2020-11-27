@@ -74,9 +74,11 @@ func OCToTraceData(td consumerdata.TraceData) pdata.Traces {
 			continue
 		}
 
-		// Temporary hack to put service.name in the Resource so that SFx backend honours it.
-		ocSpan.Resource = &ocresource.Resource{
-			Labels: map[string]string{"service.name": ocSpan.Attributes.AttributeMap["service.name"].GetStringValue().GetValue()},
+		// Temporary hack to put service.name in the Resource so that SFx backend honors it.
+		if ocSpan.Attributes != nil && ocSpan.Attributes.AttributeMap != nil {
+			ocSpan.Resource = &ocresource.Resource{
+				Labels: map[string]string{"service.name": ocSpan.Attributes.AttributeMap["service.name"].GetStringValue().GetValue()},
+			}
 		}
 
 		if ocSpan.Resource == nil {

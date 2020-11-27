@@ -46,7 +46,7 @@ func TestQueuedRetry_DropOnPermanentError(t *testing.T) {
 	mockR := newMockRequest(context.Background(), 2, consumererror.Permanent(errors.New("bad data")))
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(mockR)
+		droppedItems, err := be.sender.send(context.Background(), mockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -72,7 +72,7 @@ func TestQueuedRetry_DropOnNoRetry(t *testing.T) {
 	mockR := newMockRequest(context.Background(), 2, errors.New("transient error"))
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(mockR)
+		droppedItems, err := be.sender.send(context.Background(), mockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -100,7 +100,7 @@ func TestQueuedRetry_PartialError(t *testing.T) {
 	mockR := newMockRequest(context.Background(), 2, partialErr)
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(mockR)
+		droppedItems, err := be.sender.send(context.Background(), mockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -124,7 +124,7 @@ func TestQueuedRetry_StopWhileWaiting(t *testing.T) {
 	firstMockR := newMockRequest(context.Background(), 2, errors.New("transient error"))
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(firstMockR)
+		droppedItems, err := be.sender.send(context.Background(), firstMockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -133,7 +133,7 @@ func TestQueuedRetry_StopWhileWaiting(t *testing.T) {
 	secondMockR := newMockRequest(context.Background(), 3, nil)
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(secondMockR)
+		droppedItems, err := be.sender.send(context.Background(), secondMockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -166,7 +166,7 @@ func TestQueuedRetry_DoNotPreserveCancellation(t *testing.T) {
 	mockR := newMockRequest(ctx, 2, nil)
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(mockR)
+		droppedItems, err := be.sender.send(context.Background(), mockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -194,7 +194,7 @@ func TestQueuedRetry_MaxElapsedTime(t *testing.T) {
 
 	ocs.run(func() {
 		// Add an item that will always fail.
-		droppedItems, err := be.sender.send(newErrorRequest(context.Background()))
+		droppedItems, err := be.sender.send(context.Background(), newErrorRequest(context.Background()))
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -203,7 +203,7 @@ func TestQueuedRetry_MaxElapsedTime(t *testing.T) {
 	start := time.Now()
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(mockR)
+		droppedItems, err := be.sender.send(context.Background(), mockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -238,7 +238,7 @@ func TestQueuedRetry_ThrottleError(t *testing.T) {
 	start := time.Now()
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(mockR)
+		droppedItems, err := be.sender.send(context.Background(), mockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -270,7 +270,7 @@ func TestQueuedRetry_RetryOnError(t *testing.T) {
 	mockR := newMockRequest(context.Background(), 2, errors.New("transient error"))
 	ocs.run(func() {
 		// This is asynchronous so it should just enqueue, no errors expected.
-		droppedItems, err := be.sender.send(mockR)
+		droppedItems, err := be.sender.send(context.Background(), mockR)
 		require.NoError(t, err)
 		assert.Equal(t, 0, droppedItems)
 	})
@@ -294,7 +294,7 @@ func TestQueuedRetry_DropOnFull(t *testing.T) {
 	t.Cleanup(func() {
 		assert.NoError(t, be.Shutdown(context.Background()))
 	})
-	droppedItems, err := be.sender.send(newMockRequest(context.Background(), 2, errors.New("transient error")))
+	droppedItems, err := be.sender.send(context.Background(), newMockRequest(context.Background(), 2, errors.New("transient error")))
 	require.Error(t, err)
 	assert.Equal(t, 2, droppedItems)
 }
@@ -320,7 +320,7 @@ func TestQueuedRetryHappyPath(t *testing.T) {
 		ocs.run(func() {
 			req := newMockRequest(context.Background(), 2, nil)
 			reqs = append(reqs, req)
-			droppedItems, err := be.sender.send(req)
+			droppedItems, err := be.sender.send(context.Background(), req)
 			require.NoError(t, err)
 			assert.Equal(t, 0, droppedItems)
 		})
@@ -436,8 +436,8 @@ func newObservabilityConsumerSender(nextSender requestSender) *observabilityCons
 	return &observabilityConsumerSender{waitGroup: new(sync.WaitGroup), nextSender: nextSender}
 }
 
-func (ocs *observabilityConsumerSender) send(req request) (int, error) {
-	dic, err := ocs.nextSender.send(req)
+func (ocs *observabilityConsumerSender) send(ctx context.Context, req request) (int, error) {
+	dic, err := ocs.nextSender.send(ctx, req)
 	atomic.AddInt64(&ocs.sentItemsCount, int64(req.count()-dic))
 	atomic.AddInt64(&ocs.droppedItemsCount, int64(dic))
 	ocs.waitGroup.Done()

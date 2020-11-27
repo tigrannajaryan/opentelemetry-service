@@ -137,8 +137,8 @@ type tracesProcessor struct {
 }
 
 func (tp *tracesProcessor) ConsumeTraces(ctx context.Context, td pdata.Traces) error {
-	//span := trace.FromContext(ctx)
-	//span.Annotate(tp.traceAttributes, "Start processing.")
+	// span := trace.FromContext(ctx)
+	// span.Annotate(tp.traceAttributes, "Start processing.")
 
 	spanName := tp.fullName
 	ctx, span := trace.StartSpan(ctx, spanName)
@@ -148,7 +148,7 @@ func (tp *tracesProcessor) ConsumeTraces(ctx context.Context, td pdata.Traces) e
 
 	var err error
 	td, err = tp.processor.ProcessTraces(ctx, td)
-	//span.Annotate(tp.traceAttributes, "End processing.")
+	// span.Annotate(tp.traceAttributes, "End processing.")
 
 	span.End()
 

@@ -47,6 +47,9 @@ processors:
   batch/traces:
     timeout: 10s
 
+  batch/self:
+    timeout: 10s
+
   batch/metrics:
     timeout: 10s
 
@@ -77,8 +80,9 @@ exporters:
     headers:
       X-SF-Token: qecVh09hjOsJuZ9GqqcGQw
 
-  otlphttp/metrics:
-    metrics_endpoint: "http://localhost:1234"
+  otlphttp/bad:
+    metrics_endpoint: "https://httpstat.us/500"
+    traces_endpoint: "https://httpstat.us/400"
     retry_on_failure:
       max_elapsed_time: 10s
 
@@ -86,19 +90,19 @@ service:
 
   pipelines:
 
-    traces:
-      receivers: [otlp, jaeger, zipkin]
-      processors: [batch/traces, attributes/addenv]
-      exporters: [logging/traces]
-
-    traces/selfreport:
-      receivers: [opencensus]
-      processors: [attributes/envself, resource/ns]
-      exporters: [otlphttp]
-
     metrics:
       receivers: [otlp, opencensus, prometheus]
       processors: [batch/metrics]
-      exporters: [logging/metrics, otlphttp/metrics]
+      exporters: [logging/metrics, otlphttp/bad]
+
+    traces:
+      receivers: [otlp, jaeger, zipkin]
+      processors: [batch/traces, attributes/addenv]
+      exporters: [otlphttp/bad]
+
+    traces/selfreport:
+      receivers: [opencensus]
+      processors: [attributes/envself]
+      exporters: [otlphttp]
 
   extensions: [health_check, pprof, zpages]
